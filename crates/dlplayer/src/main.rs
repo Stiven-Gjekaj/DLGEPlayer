@@ -28,6 +28,8 @@ enum Command {
         #[arg(long)]
         strings: bool,
     },
+    /// Write a listing and a text file for each script in a CPK archive.
+    DumpScripts { archive: PathBuf, out: PathBuf },
 }
 
 #[derive(Subcommand)]
@@ -48,6 +50,7 @@ fn main() -> ExitCode {
             CpkCommand::Extract { archive, out } => cpk_extract(&archive, &out),
         },
         Command::Disasm { file, strings } => disasm(&file, strings),
+        Command::DumpScripts { archive, out } => dump_scripts(&archive, &out),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -117,6 +120,45 @@ fn disasm(path: &Path, strings_only: bool) -> Result<()> {
         stcm2l::disasm::disassemble(&script)
     };
     print!("{text}");
+    Ok(())
+}
+
+fn dump_scripts(path: &Path, out: &Path) -> Result<()> {
+    let mut archive = open_cpk(path)?;
+    let entries = archive.entries.clone();
+    let mut failed = 0;
+    let mut lines = 0;
+    for entry in &entries {
+        let data = archive.read(entry)?;
+        let script = match stcm2l::Script::parse(&data) {
+            Ok(script) => script,
+            Err(e) => {
+                eprintln!("{}: {e}", entry.path());
+                failed += 1;
+                continue;
+            }
+        };
+        let base = safe_join(out, &entry.path())?;
+        if let Some(parent) = base.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let text = stcm2l::disasm::strings(&script);
+        lines += text.lines().count();
+        std::fs::write(
+            base.with_extension("asm"),
+            stcm2l::disasm::disassemble(&script),
+        )?;
+        std::fs::write(base.with_extension("txt"), text)?;
+    }
+    eprintln!(
+        "dumped {} of {} scripts, {lines} text lines, to {}",
+        entries.len() - failed,
+        entries.len(),
+        out.display()
+    );
+    if failed > 0 {
+        return Err(format!("{failed} scripts did not parse").into());
+    }
     Ok(())
 }
 
