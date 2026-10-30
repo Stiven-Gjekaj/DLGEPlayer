@@ -21,6 +21,13 @@ enum Command {
         #[command(subcommand)]
         command: CpkCommand,
     },
+    /// Print the actions and the text of an STCM2L script.
+    Disasm {
+        file: PathBuf,
+        /// Print only the text lines.
+        #[arg(long)]
+        strings: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -40,6 +47,7 @@ fn main() -> ExitCode {
             CpkCommand::List { archive } => cpk_list(&archive),
             CpkCommand::Extract { archive, out } => cpk_extract(&archive, &out),
         },
+        Command::Disasm { file, strings } => disasm(&file, strings),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -92,6 +100,23 @@ fn cpk_extract(path: &Path, out: &Path) -> Result<()> {
         std::fs::write(&target, data)?;
     }
     eprintln!("wrote {} files to {}", entries.len(), out.display());
+    Ok(())
+}
+
+fn disasm(path: &Path, strings_only: bool) -> Result<()> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let bytes = if cpk::crilayla::is_compressed(&bytes) {
+        cpk::crilayla::decompress(&bytes)?
+    } else {
+        bytes
+    };
+    let script = stcm2l::Script::parse(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = if strings_only {
+        stcm2l::disasm::strings(&script)
+    } else {
+        stcm2l::disasm::disassemble(&script)
+    };
+    print!("{text}");
     Ok(())
 }
 
