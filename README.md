@@ -68,6 +68,10 @@ The corpus test reads real scripts. It runs only if you set
 
 See [docs/formats.md](docs/formats.md).
 
+## Roadmap
+
+See [docs/roadmap.md](docs/roadmap.md).
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
