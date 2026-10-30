@@ -75,6 +75,10 @@ The sections follow in this sequence:
 The marker and the body of the collection link make an 80-byte trailer.
 The body holds 0, the file size, and 56 zero bytes.
 
+In the original files, the trailer is the end of the file.
+A translation patch can add an appendix after the trailer.
+The file size in the body then includes the appendix.
+
 ### Actions
 
 | Field | Value |
@@ -96,6 +100,7 @@ The scripts have 76 different opcodes and 83115 calls.
 | `p0 = 0xffffffXX` | the immediate value `XX` |
 | `p0` in the data of the action | a data block |
 | `p0` in the global data | a global variable |
+| `p0` in the appendix | a data block that a patch added |
 
 `p1` and `p2` are `0x40000000` when the shape does not use them.
 
@@ -115,6 +120,29 @@ Opcodes `0x3` and `0x6` have a code address. They are jumps.
 Each entry has 40 bytes: 0, a 32-byte name padded with zero bytes, and
 the offset of an action.
 
+## The English patch
+
+The English patch is a LayeredFS mod for the title `0100bd700e648000`.
+It replaces these files of the RomFS:
+
+- `script.cpk`
+- `Archive/advUI.nxonnx32.bea`
+- `Archive/lua.nxonnx32.bea`
+- `Archive/static~bg.bin.nxonnx32.bea`
+- `Archive/static~select.bin.nxonnx32.bea`
+- `Archive/static~speaker.bin.nxonnx32.bea`
+
+The patched `script.cpk` holds the same 706 script names.
+Each patched script puts the English text in data blocks in the appendix.
+The parameters point to these blocks.
+The old Japanese blocks stay in the actions, and no parameter points to them.
+
+In the patch that we examined, 137520 actions have the opcode `0x4ba`.
+118839 of them point to English text.
+18681 of them point to an empty text block.
+The text is Shift-JIS. It is mostly ASCII, with some Shift-JIS punctuation
+such as `’` and `ー`. It has name tokens such as `#Name[2]`.
+
 ## Known open items
 
 - The text has some rare characters where the context needs punctuation.
@@ -122,3 +150,5 @@ the offset of an action.
   shows a different glyph for these characters. This is not verified.
 - `op_ff14` has 12 bytes of data that no parameter points to.
 - The meaning of most opcodes is not known yet.
+- The name tokens of the English patch, such as `#Name[2]`, are not
+  decoded yet.
