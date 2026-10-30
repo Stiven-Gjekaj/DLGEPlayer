@@ -275,7 +275,7 @@ mod tests {
         // literal 'z', literal 'y', literal 'x', then a match of 3 bytes
         // at distance 3.
         let mut bits = BitWriter::default();
-        for byte in [b'z', b'y', b'x'] {
+        for byte in *b"zyx" {
             bits.put(0, 1);
             bits.put(byte as u32, 8);
         }
