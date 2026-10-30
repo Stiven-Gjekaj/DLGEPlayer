@@ -1,0 +1,34 @@
+# Build output.
+/target/
+
+# Game data. The repository must never hold game data.
+# The user supplies these files at import time.
+*.nsp
+*.xci
+*.nca
+*.cpk
+*.bea
+*.acb
+*.acf
+*.awb
+*.usm
+*.dat
+*.DAT
+*.gbin
+*.gstr
+*.ffu
+*.keys
+/romfs/
+/exefs/
+/dump/
+/import/
+/out/
+
+# Patch files.
+*.xdelta
+*.ips
+*.bps
+/patch/
+
+# Operating system files.
+.DS_Store
