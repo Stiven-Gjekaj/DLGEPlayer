@@ -14,6 +14,8 @@
 //! - the marker `CODE_START_\0`, then the actions.
 //! - the marker `EXPORT_DATA\0`, then the export entries.
 //! - the marker `COLLECTION_LINK\0`, then a 64-byte body.
+//! - an appendix. The original files have no appendix. A translation
+//!   patch puts new data blocks here and points the parameters to them.
 //!
 //! An action has a 16-byte head: a call flag, an opcode, the number of
 //! parameters, and the length of the full action in bytes.
@@ -143,6 +145,8 @@ pub struct Script {
     pub link_unknown: u32,
     /// The bytes after the end offset in the collection link body.
     pub link_rest: [u8; COLLECTION_LINK_LEN - 8],
+    /// The bytes after the collection link body.
+    pub appendix: Vec<u8>,
 }
 
 impl Script {
@@ -154,6 +158,24 @@ impl Script {
     /// Gives the file offset of the first action.
     pub fn code_offset(&self) -> u32 {
         self.global_data_offset() + (self.global_data.len() + CODE_START.len()) as u32
+    }
+
+    /// Gives the file offset of the first byte of the appendix.
+    pub fn appendix_offset(&self) -> u32 {
+        let code: usize = self.actions.iter().map(Action::len).sum();
+        self.code_offset()
+            + (code
+                + EXPORT_DATA.len()
+                + self.exports.len() * EXPORT_LEN
+                + COLLECTION_LINK.len()
+                + COLLECTION_LINK_LEN) as u32
+    }
+
+    /// Gives the appendix bytes from a file offset to the end of the file,
+    /// if the offset is in the appendix.
+    pub fn appendix_at(&self, offset: u32) -> Option<&[u8]> {
+        let start = offset.checked_sub(self.appendix_offset())? as usize;
+        self.appendix.get(start..).filter(|rest| !rest.is_empty())
     }
 
     /// Gives the text of the tag up to the first zero byte.
@@ -262,11 +284,9 @@ impl Script {
             )));
         }
         r.expect(link_marker, COLLECTION_LINK)?;
-        if link_offset + COLLECTION_LINK_LEN != data.len() {
-            return Err(Error::Invalid(format!(
-                "file has {} bytes after the collection link",
-                data.len() as isize - (link_offset + COLLECTION_LINK_LEN) as isize
-            )));
+        let appendix_start = link_offset + COLLECTION_LINK_LEN;
+        if appendix_start > data.len() {
+            return Err(Error::OutOfBounds("collection link body"));
         }
         let end = r.u32(link_offset + 4)? as usize;
         if end != data.len() {
@@ -288,6 +308,7 @@ impl Script {
                 .bytes(link_offset + 8, COLLECTION_LINK_LEN - 8)?
                 .try_into()
                 .unwrap(),
+            appendix: data[appendix_start..].to_vec(),
         })
     }
 
@@ -325,9 +346,11 @@ impl Script {
         }
         out.extend_from_slice(COLLECTION_LINK);
         let link_offset = out.len() as u32;
+        let end = link_offset + (COLLECTION_LINK_LEN + self.appendix.len()) as u32;
         put(&mut out, self.link_unknown);
-        put(&mut out, link_offset + COLLECTION_LINK_LEN as u32);
+        put(&mut out, end);
         out.extend_from_slice(&self.link_rest);
+        out.extend_from_slice(&self.appendix);
 
         out[0x20..0x24].copy_from_slice(&export_offset.to_le_bytes());
         out[0x24..0x28].copy_from_slice(&(self.exports.len() as u32).to_le_bytes());
@@ -426,6 +449,7 @@ mod tests {
             exports: vec![Export::new("main", code).unwrap()],
             link_unknown: 0,
             link_rest: [0; COLLECTION_LINK_LEN - 8],
+            appendix: vec![],
         }
     }
 
@@ -533,10 +557,37 @@ mod tests {
     }
 
     #[test]
-    fn rejects_data_after_the_collection_link() {
+    fn rejects_bytes_that_the_end_offset_does_not_cover() {
         let mut bytes = sample().to_bytes();
         bytes.extend([0u8; 4]);
-        assert!(Script::parse(&bytes).is_err());
+        assert!(matches!(Script::parse(&bytes), Err(Error::Invalid(_))));
+    }
+
+    #[test]
+    fn keeps_the_appendix() {
+        let mut script = sample();
+        script.appendix = b"appended block\0\0".to_vec();
+        let bytes = script.to_bytes();
+        let u32_at = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+
+        let link = u32_at(0x2c) as usize;
+        assert_eq!(u32_at(link + 4) as usize, bytes.len());
+        assert_eq!(script.appendix_offset() as usize, link + 64);
+        assert_eq!(&bytes[link + 64..], b"appended block\0\0");
+
+        let parsed = Script::parse(&bytes).unwrap();
+        assert_eq!(parsed, script);
+        assert_eq!(parsed.to_bytes(), bytes);
+    }
+
+    #[test]
+    fn finds_bytes_in_the_appendix() {
+        let mut script = sample();
+        script.appendix = vec![1, 2, 3, 4];
+        let start = script.appendix_offset();
+        assert_eq!(script.appendix_at(start + 1), Some(&[2u8, 3, 4][..]));
+        assert_eq!(script.appendix_at(start + 4), None);
+        assert_eq!(script.appendix_at(start - 1), None);
     }
 
     #[test]

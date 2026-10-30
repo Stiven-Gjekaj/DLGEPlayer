@@ -205,6 +205,7 @@ mod tests {
             exports: vec![],
             link_unknown: 0,
             link_rest: [0; 56],
+            appendix: vec![],
         };
         let code = script.code_offset();
         // "んー" in Shift-JIS.
