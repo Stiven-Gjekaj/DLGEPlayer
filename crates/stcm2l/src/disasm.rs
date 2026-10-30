@@ -41,7 +41,7 @@ pub fn strings(script: &Script) -> String {
     for action in &script.actions {
         for param in &action.params {
             if let Some(block) = Operand::of(script, action, param).block()
-                && block.looks_like_text()
+                && (holds_text(action) || block.looks_like_text())
                 && let Some(text) = block.as_text()
             {
                 let _ = writeln!(out, "{:08x}\t{}", action.offset, escape(&text));
@@ -91,7 +91,7 @@ fn line(script: &Script, action: &Action, labels: &BTreeMap<u32, String>) -> Str
         .iter()
         .map(|param| {
             let operand = Operand::of(script, action, param);
-            let mut text = format_operand(&operand, labels);
+            let mut text = format_operand(&operand, labels, holds_text(action));
             if operand.has_extra(param) {
                 let _ = write!(text, "{{{:#x},{:#x}}}", param.p1, param.p2);
             }
@@ -107,6 +107,15 @@ fn line(script: &Script, action: &Action, labels: &BTreeMap<u32, String>) -> Str
         let _ = write!(out, "  ; {unused} more data bytes");
     }
     out
+}
+
+/// The opcode of an action whose data block always holds text.
+const TEXT_LINE: u32 = 0x4ba;
+
+/// Tells if the data blocks of the action always hold text. A short line
+/// of text such as "Oh" can look like an integer to the text test.
+fn holds_text(action: &Action) -> bool {
+    !action.is_call() && action.opcode == TEXT_LINE
 }
 
 /// Gives the name of an opcode whose meaning is verified.
@@ -142,7 +151,7 @@ pub fn mnemonic(opcode: u32) -> String {
     }
 }
 
-fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>) -> String {
+fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>, text: bool) -> String {
     match operand {
         Operand::Code(target) => format!(
             "->{}",
@@ -152,20 +161,23 @@ fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>) -> Stri
                 .unwrap_or_else(|| format!("{target:#x}"))
         ),
         Operand::Immediate(v) => format!("#{v:#x}"),
-        Operand::Local(_, block) | Operand::Appended(_, block) => format_block(block),
+        Operand::Local(_, block) | Operand::Appended(_, block) => format_block(block, text),
         Operand::Global(offset, block) => {
-            let value = block.as_ref().map(format_block).unwrap_or_default();
+            let value = block
+                .as_ref()
+                .map(|b| format_block(b, false))
+                .unwrap_or_default();
             format!("g{offset:#x}={value}")
         }
         Operand::Unknown(p) => format!("?({:#x},{:#x},{:#x})", p.p0, p.p1, p.p2),
     }
 }
 
-fn format_block(block: &DataBlock<'_>) -> String {
+fn format_block(block: &DataBlock<'_>, text: bool) -> String {
     if let Some(f) = block.as_f32() {
         return format!("{f:?}f");
     }
-    if block.looks_like_text()
+    if (text || block.looks_like_text())
         && let Some(text) = block.as_text()
     {
         return format!("\"{}\"", escape(&text));
@@ -297,6 +309,15 @@ mod tests {
         let code = script.code_offset();
         assert!(disassemble(&script).contains(&format!("{code:08x}  text_line \"Hello.\"")));
         assert_eq!(strings(&script), format!("{code:08x}\tHello.\n"));
+    }
+
+    #[test]
+    fn a_short_text_line_stays_text() {
+        let mut script = sample();
+        script.actions[0].data = block(b"Oh\0");
+        let code = script.code_offset();
+        assert!(disassemble(&script).contains(&format!("{code:08x}  text_line \"Oh\"")));
+        assert_eq!(strings(&script), format!("{code:08x}\tOh\n"));
     }
 
     #[test]

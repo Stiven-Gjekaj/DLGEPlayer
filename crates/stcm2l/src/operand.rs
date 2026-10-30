@@ -96,11 +96,15 @@ impl<'a> DataBlock<'a> {
 
     /// Tells if the block is more likely text than an integer.
     ///
-    /// A one-word block is text only if it has two or more bytes before
-    /// the zero byte. The integer 0x22, for example, also reads as the
-    /// text `"`.
+    /// A one-word block is text only if it starts with a Shift-JIS lead
+    /// byte or holds three characters. An integer such as 30063 also reads
+    /// as the two letters `ou`, and the integer 0x22 reads as `"`.
     pub fn looks_like_text(&self) -> bool {
-        self.as_text().is_some() && (self.bytes.len() > 4 || self.text_bytes().len() >= 2)
+        let Some(_) = self.as_text() else {
+            return false;
+        };
+        let raw = self.text_bytes();
+        self.bytes.len() > 4 || raw[0] >= 0x80 || raw.len() >= 3
     }
 }
 
@@ -229,6 +233,16 @@ mod tests {
     fn one_double_byte_character_is_text() {
         // "あ" in Shift-JIS.
         let bytes = block(0, &[0x82, 0xa0, 0, 0]);
+        assert!(DataBlock::parse(&bytes).unwrap().looks_like_text());
+    }
+
+    #[test]
+    fn two_letters_in_one_word_are_an_integer() {
+        let bytes = block(0, &30063u32.to_le_bytes());
+        let b = DataBlock::parse(&bytes).unwrap();
+        assert_eq!(b.as_text().as_deref(), Some("ou"));
+        assert!(!b.looks_like_text());
+        let bytes = block(0, b"abc\0");
         assert!(DataBlock::parse(&bytes).unwrap().looks_like_text());
     }
 
