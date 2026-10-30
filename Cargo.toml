@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/cpk",
+    "crates/stcm2l",
+    "crates/importer",
+    "crates/vm",
+    "crates/player",
+    "crates/dlplayer",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+cpk = { path = "crates/cpk" }
+stcm2l = { path = "crates/stcm2l" }
+importer = { path = "crates/importer" }
+vm = { path = "crates/vm" }
