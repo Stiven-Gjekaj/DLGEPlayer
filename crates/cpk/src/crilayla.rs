@@ -125,7 +125,9 @@ pub fn decompress(input: &[u8]) -> Result<Vec<u8>> {
 /// make compressed data. The data must be at least 0x100 bytes long.
 pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
     if data.len() < PREFIX_LEN {
-        return Err(Error::Unsupported("crilayla input is shorter than 0x100 bytes".into()));
+        return Err(Error::Unsupported(
+            "crilayla input is shorter than 0x100 bytes".into(),
+        ));
     }
     let body = &data[PREFIX_LEN..];
     let mut bits = BitWriter::default();

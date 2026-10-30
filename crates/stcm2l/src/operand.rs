@@ -32,7 +32,9 @@ impl<'a> DataBlock<'a> {
     /// Reads a block from the start of `data`.
     pub fn parse(data: &'a [u8]) -> Option<DataBlock<'a>> {
         let word = |i: usize| -> Option<u32> {
-            Some(u32::from_le_bytes(data.get(i * 4..i * 4 + 4)?.try_into().ok()?))
+            Some(u32::from_le_bytes(
+                data.get(i * 4..i * 4 + 4)?.try_into().ok()?,
+            ))
         };
         let kind = word(0)?;
         let words = word(1)? as usize;
@@ -62,7 +64,11 @@ impl<'a> DataBlock<'a> {
 
     /// Gives the bytes before the first zero byte.
     pub fn text_bytes(&self) -> &'a [u8] {
-        let end = self.bytes.iter().position(|&b| b == 0).unwrap_or(self.bytes.len());
+        let end = self
+            .bytes
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(self.bytes.len());
         &self.bytes[..end]
     }
 

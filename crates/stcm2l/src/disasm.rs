@@ -122,7 +122,10 @@ fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>) -> Stri
     match operand {
         Operand::Code(target) => format!(
             "->{}",
-            labels.get(target).cloned().unwrap_or_else(|| format!("{target:#x}"))
+            labels
+                .get(target)
+                .cloned()
+                .unwrap_or_else(|| format!("{target:#x}"))
         ),
         Operand::Immediate(v) => format!("#{v:#x}"),
         Operand::Local(_, block) => format_block(block),

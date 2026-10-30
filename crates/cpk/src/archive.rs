@@ -147,7 +147,9 @@ fn itoc_entries(itoc: &Table, content: u64, align: u64) -> Result<Vec<Entry>> {
         }
         let table = Table::parse(bytes)?;
         for row in 0..table.rows.len() {
-            let id = table.get_u64(row, "ID").ok_or(Error::OutOfBounds("ITOC ID"))?;
+            let id = table
+                .get_u64(row, "ID")
+                .ok_or(Error::OutOfBounds("ITOC ID"))?;
             let size = table
                 .get_u64(row, "FileSize")
                 .ok_or(Error::OutOfBounds("ITOC FileSize"))?;
@@ -238,9 +240,16 @@ mod tests {
         }
         let toc = Table {
             name: "CpkTocInfo".into(),
-            columns: ["DirName", "FileName", "FileSize", "ExtractSize", "FileOffset", "ID"]
-                .map(String::from)
-                .to_vec(),
+            columns: [
+                "DirName",
+                "FileName",
+                "FileSize",
+                "ExtractSize",
+                "FileOffset",
+                "ID",
+            ]
+            .map(String::from)
+            .to_vec(),
             rows,
         };
 
@@ -295,7 +304,9 @@ mod tests {
         };
         let itoc = Table {
             name: "CpkItocInfo".into(),
-            columns: ["FilesL", "FilesH", "DataL", "DataH"].map(String::from).to_vec(),
+            columns: ["FilesL", "FilesH", "DataL", "DataH"]
+                .map(String::from)
+                .to_vec(),
             rows: vec![vec![
                 Value::U32(1),
                 Value::U32(1),

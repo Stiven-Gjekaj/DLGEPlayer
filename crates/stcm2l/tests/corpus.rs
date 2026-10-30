@@ -18,7 +18,10 @@ fn every_script_round_trips() {
     let mut failures = Vec::new();
     for entry in std::fs::read_dir(&dir).expect("read DLGE_SCRIPTS") {
         let path = entry.unwrap().path();
-        if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("dat")) {
+        if !path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("dat"))
+        {
             continue;
         }
         let bytes = std::fs::read(&path).unwrap();
@@ -30,6 +33,11 @@ fn every_script_round_trips() {
         }
     }
     assert!(count > 0, "no .dat files in {}", dir.display());
-    assert!(failures.is_empty(), "{} of {count} failed:\n{}", failures.len(), failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "{} of {count} failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
     eprintln!("{count} scripts round-trip");
 }

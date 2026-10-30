@@ -117,7 +117,11 @@ impl Export {
 
     /// Gives the name up to the first zero byte.
     pub fn name(&self) -> String {
-        let end = self.name.iter().position(|&b| b == 0).unwrap_or(self.name.len());
+        let end = self
+            .name
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(self.name.len());
         String::from_utf8_lossy(&self.name[..end]).into_owned()
     }
 }
@@ -213,7 +217,9 @@ impl Script {
             let params_end = count
                 .checked_mul(PARAM_LEN)
                 .and_then(|n| n.checked_add(ACTION_HEAD_LEN))
-                .ok_or(Error::Invalid(format!("action at {at:#x} has too many parameters")))?;
+                .ok_or(Error::Invalid(format!(
+                    "action at {at:#x} has too many parameters"
+                )))?;
             if len < params_end || at + len > export_marker {
                 return Err(Error::Invalid(format!(
                     "action at {at:#x} has a bad length {len:#x}"
@@ -278,7 +284,10 @@ impl Script {
             actions,
             exports,
             link_unknown: r.u32(link_offset)?,
-            link_rest: r.bytes(link_offset + 8, COLLECTION_LINK_LEN - 8)?.try_into().unwrap(),
+            link_rest: r
+                .bytes(link_offset + 8, COLLECTION_LINK_LEN - 8)?
+                .try_into()
+                .unwrap(),
         })
     }
 
@@ -493,7 +502,10 @@ mod tests {
     fn finds_actions_by_offset() {
         let script = sample();
         let second = script.actions[1].offset;
-        assert_eq!(script.action_at(second).unwrap().opcode, script.code_offset());
+        assert_eq!(
+            script.action_at(second).unwrap().opcode,
+            script.code_offset()
+        );
         assert!(script.action_at(second + 4).is_none());
         let first = &script.actions[0];
         assert_eq!(script.action_containing(first.offset + 20), Some(first));

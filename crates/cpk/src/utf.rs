@@ -94,7 +94,10 @@ impl Table {
     /// Gives the cell in `row` for the column with the name `column`.
     pub fn get(&self, row: usize, column: &str) -> Option<&Value> {
         let index = self.columns.iter().position(|c| c == column)?;
-        self.rows.get(row)?.get(index).filter(|v| **v != Value::None)
+        self.rows
+            .get(row)?
+            .get(index)
+            .filter(|v| **v != Value::None)
     }
 
     pub fn get_u64(&self, row: usize, column: &str) -> Option<u64> {
@@ -153,19 +156,28 @@ impl Reader<'_> {
     }
 
     fn u16(&self, at: usize) -> Result<u16> {
-        Ok(u16::from_be_bytes(self.bytes(at, 2, "utf cell")?.try_into().unwrap()))
+        Ok(u16::from_be_bytes(
+            self.bytes(at, 2, "utf cell")?.try_into().unwrap(),
+        ))
     }
 
     fn u32(&self, at: usize) -> Result<u32> {
-        Ok(u32::from_be_bytes(self.bytes(at, 4, "utf cell")?.try_into().unwrap()))
+        Ok(u32::from_be_bytes(
+            self.bytes(at, 4, "utf cell")?.try_into().unwrap(),
+        ))
     }
 
     fn u64(&self, at: usize) -> Result<u64> {
-        Ok(u64::from_be_bytes(self.bytes(at, 8, "utf cell")?.try_into().unwrap()))
+        Ok(u64::from_be_bytes(
+            self.bytes(at, 8, "utf cell")?.try_into().unwrap(),
+        ))
     }
 
     fn cstr(&self, at: usize) -> Result<String> {
-        let rest = self.data.get(at..).ok_or(Error::OutOfBounds("utf string"))?;
+        let rest = self
+            .data
+            .get(at..)
+            .ok_or(Error::OutOfBounds("utf string"))?;
         let end = rest
             .iter()
             .position(|&b| b == 0)
@@ -277,7 +289,9 @@ fn write(table: &Table) -> Result<Vec<u8>> {
     let column_count = table.columns.len();
     for row in &table.rows {
         if row.len() != column_count {
-            return Err(Error::Unsupported("row length differs from column count".into()));
+            return Err(Error::Unsupported(
+                "row length differs from column count".into(),
+            ));
         }
     }
 
