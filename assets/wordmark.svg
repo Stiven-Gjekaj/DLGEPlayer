@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="560" height="120" viewBox="0 0 560 120" role="img" aria-label="DLGE Player">
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="120" viewBox="0 0 640 120" role="img" aria-label="DLGE Player">
   <defs>
     <linearGradient id="blood" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#e11d48"/>
       <stop offset="1" stop-color="#7f1d1d"/>
     </linearGradient>
   </defs>
-  <text x="280" y="78" text-anchor="middle"
-        font-family="Georgia, 'Times New Roman', serif" font-size="72"
-        font-weight="700" letter-spacing="6" textLength="500" lengthAdjust="spacingAndGlyphs"
+  <text x="320" y="74" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-size="60" font-weight="700"
+        textLength="520" lengthAdjust="spacingAndGlyphs"
         fill="url(#blood)">DLGE PLAYER</text>
-  <rect x="150" y="96" width="260" height="3" rx="1.5" fill="#9f1239"/>
-  <circle cx="280" cy="106" r="4" fill="#be123c"/>
+  <rect x="190" y="94" width="260" height="3" rx="1.5" fill="#9f1239"/>
+  <circle cx="320" cy="104" r="4" fill="#be123c"/>
 </svg>
