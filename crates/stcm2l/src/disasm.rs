@@ -40,7 +40,7 @@ pub fn strings(script: &Script) -> String {
     let mut out = String::new();
     for action in &script.actions {
         for param in &action.params {
-            if let Operand::Local(_, block) = Operand::of(script, action, param)
+            if let Some(block) = Operand::of(script, action, param).block()
                 && block.looks_like_text()
                 && let Some(text) = block.as_text()
             {
@@ -128,7 +128,7 @@ fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>) -> Stri
                 .unwrap_or_else(|| format!("{target:#x}"))
         ),
         Operand::Immediate(v) => format!("#{v:#x}"),
-        Operand::Local(_, block) => format_block(block),
+        Operand::Local(_, block) | Operand::Appended(_, block) => format_block(block),
         Operand::Global(offset, block) => {
             let value = block.as_ref().map(format_block).unwrap_or_default();
             format!("g{offset:#x}={value}")
@@ -263,6 +263,16 @@ mod tests {
         let script = sample();
         let out = strings(&script);
         assert_eq!(out, format!("{:08x}\tんー\n", script.code_offset()));
+    }
+
+    #[test]
+    fn listing_and_strings_read_text_in_the_appendix() {
+        let mut script = sample();
+        script.appendix = block(b"Hello.\0");
+        script.actions[0].params[0].p0 = script.appendix_offset();
+        let code = script.code_offset();
+        assert!(disassemble(&script).contains(&format!("{code:08x}  op_4ba \"Hello.\"")));
+        assert_eq!(strings(&script), format!("{code:08x}\tHello.\n"));
     }
 
     #[test]

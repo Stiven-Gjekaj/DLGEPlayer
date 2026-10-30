@@ -6,6 +6,7 @@
 //! - `p0 >> 24 == 0xff`: a small immediate value in the low byte.
 //! - `p0` in the data of the same action: a data block of the action.
 //! - `p0` in the global data: a global variable.
+//! - `p0` in the appendix: a data block that a patch added.
 //!
 //! In the first three shapes, `p1` and `p2` are `0x40000000` when not used.
 
@@ -114,6 +115,8 @@ pub enum Operand<'a> {
     Local(u32, DataBlock<'a>),
     /// A global variable. The offset is the file offset.
     Global(u32, Option<DataBlock<'a>>),
+    /// A data block in the appendix. The offset is the file offset.
+    Appended(u32, DataBlock<'a>),
     /// A shape that the reader does not know.
     Unknown(Param),
 }
@@ -137,7 +140,21 @@ impl<'a> Operand<'a> {
             let block = DataBlock::parse(&script.global_data[(p0 - global_start) as usize..]);
             return Operand::Global(p0, block);
         }
+        if let Some(data) = script.appendix_at(p0)
+            && let Some(block) = DataBlock::parse(data)
+        {
+            return Operand::Appended(p0, block);
+        }
         Operand::Unknown(*param)
+    }
+
+    /// Gives the data block of a parameter that points to one in the
+    /// action or in the appendix.
+    pub fn block(&self) -> Option<DataBlock<'a>> {
+        match self {
+            Operand::Local(_, block) | Operand::Appended(_, block) => Some(*block),
+            _ => None,
+        }
     }
 
     /// Tells if `p1` and `p2` hold values that the operand does not explain.
@@ -234,6 +251,43 @@ mod tests {
     }
 
     #[test]
+    fn finds_a_block_in_the_appendix() {
+        let mut script = Script {
+            tag: [0; 32],
+            unknown: 1,
+            reserved: [0; 32],
+            global_data: vec![],
+            actions: vec![],
+            exports: vec![],
+            link_unknown: 0,
+            link_rest: [0; 56],
+            appendix: vec![],
+        };
+        let at = script.code_offset();
+        script.actions.push(Action {
+            offset: at,
+            call: 0,
+            opcode: 0x4ba,
+            params: vec![Param {
+                p0: 0,
+                p1: UNUSED,
+                p2: UNUSED,
+            }],
+            data: vec![],
+        });
+        script.appendix = block(0, b"Hello.\0");
+        script.actions[0].params[0].p0 = script.appendix_offset();
+
+        let action = &script.actions[0];
+        let op = Operand::of(&script, action, &action.params[0]);
+        assert!(matches!(op, Operand::Appended(o, _) if o == script.appendix_offset()));
+        assert_eq!(
+            op.block().and_then(|b| b.as_text()).as_deref(),
+            Some("Hello.")
+        );
+    }
+
+    #[test]
     fn classifies_parameters() {
         let mut global = Vec::new();
         global.extend(block(0, &5i32.to_le_bytes()));
@@ -277,6 +331,8 @@ mod tests {
         assert!(matches!(ops[2], Operand::Local(_, b) if b.as_i32() == Some(9)));
         assert!(matches!(ops[3], Operand::Global(o, Some(b)) if o == g && b.as_i32() == Some(5)));
         assert!(matches!(ops[4], Operand::Unknown(_)));
+        assert_eq!(ops[2].block().and_then(|b| b.as_i32()), Some(9));
+        assert_eq!(ops[1].block(), None);
         assert!(!ops[1].has_extra(&action.params[1]));
         assert!(ops[2].has_extra(&p(at + 16 + 5 * 12, 1)));
     }
