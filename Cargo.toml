@@ -14,6 +14,9 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
+rust-version = "1.88"
+repository = "https://github.com/Stiven-Gjekaj/DLGEPlayer"
+description = "An open-source player for Diabolik Lovers Grand Edition"
 
 [workspace.dependencies]
 cpk = { path = "crates/cpk" }
