@@ -8,6 +8,8 @@
   Switch release write back byte for byte.
 - The `stcm2l` crate decodes the parameters and the data blocks of each
   action, with the Shift-JIS text.
+- The `stcm2l` crate reads the appendix that the English patch adds after
+  the collection link. All 706 patched scripts write back byte for byte.
 - `dlplayer cpk list` and `dlplayer cpk extract` read archives.
 - `dlplayer disasm` prints the listing or the text of one script.
 - `dlplayer dump-scripts` writes a listing and a text file for each script
