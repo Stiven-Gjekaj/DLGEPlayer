@@ -7,7 +7,7 @@
 _Haunted Dark Bridal and MORE,BLOOD, on your computer and your phone, from your own copy_
 
 ![Rust](https://img.shields.io/badge/rust-7f1d1d?style=for-the-badge&logo=rust&logoColor=ffffff)
-![Godot 4](https://img.shields.io/badge/godot-4-9f1239?style=for-the-badge&logo=godotengine&logoColor=ffffff)
+![Godot 4](https://img.shields.io/badge/godot_4-9f1239?style=for-the-badge&logo=godotengine&logoColor=ffffff)
 ![Windows](https://img.shields.io/badge/windows-be123c?style=for-the-badge&logo=windows&logoColor=ffffff)
 ![macOS](https://img.shields.io/badge/macos-be123c?style=for-the-badge&logo=apple&logoColor=ffffff)
 ![Linux](https://img.shields.io/badge/linux-be123c?style=for-the-badge&logo=linux&logoColor=ffffff)
