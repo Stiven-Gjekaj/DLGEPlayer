@@ -1,6 +1,7 @@
 //! Reads and writes STCM2L script files.
 
 mod error;
+pub mod operand;
 mod script;
 
 pub use error::{Error, Result};
