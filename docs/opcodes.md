@@ -11,6 +11,14 @@ Each meaning has one of these grades:
   an asset name or a file number. The handler is not read yet.
 - **guess**: the parameters suggest a meaning. It is not verified.
 
+## How to repeat the analysis
+
+1. Install the Ghidra Switch Loader for Ghidra 12.1.
+2. Import `exefs/main` of your dump into a project named `dlge`, and run the
+   auto-analysis. It takes about 5 minutes.
+3. Query the project with `tools/ghidra/query.sh`. For example,
+   `query.sh dec:0x746c0` decompiles the run loop.
+
 ## The loader
 
 `FUN_71000022f0` makes the name `<script>.dat`, reads the file from
