@@ -109,8 +109,32 @@ fn line(script: &Script, action: &Action, labels: &BTreeMap<u32, String>) -> Str
     out
 }
 
-/// Gives a name for an opcode. The names of the opcodes are not known yet.
+/// Gives the name of an opcode whose meaning is verified.
+///
+/// `docs/opcodes.md` gives the evidence for each name. An opcode with a
+/// meaning that is only probable has no name here.
+pub fn opcode_name(opcode: u32) -> Option<&'static str> {
+    Some(match opcode {
+        0x000 => "return",
+        0x003 => "if_false_goto",
+        0x006 => "goto",
+        0x3fa => "background",
+        0x402 => "foreground",
+        0x427 => "name_to_number",
+        0x44b => "movie",
+        0x462 => "voice",
+        0x464 => "sound_effect",
+        0x4ba => "text_line",
+        0x4bb => "show_message",
+        _ => return None,
+    })
+}
+
+/// Gives a name for an opcode: the verified name, or a name from the number.
 pub fn mnemonic(opcode: u32) -> String {
+    if let Some(name) = opcode_name(opcode) {
+        return name.to_string();
+    }
     if opcode >> 24 == 0xff {
         format!("op_ff{:02x}", opcode as u8)
     } else {
@@ -252,9 +276,9 @@ mod tests {
         assert!(listing.contains("; tag: STCM2L test"));
         assert!(listing.contains(&format!(".export start {code:#010x}")));
         assert!(listing.contains("\nstart:\n"));
-        assert!(listing.contains(&format!("{code:08x}  op_4ba \"んー\"")));
+        assert!(listing.contains(&format!("{code:08x}  text_line \"んー\"")));
         assert!(listing.contains(&format!("L_{jump:08x}:")));
-        assert!(listing.contains("op_006 ->start  ; 12 more data bytes"));
+        assert!(listing.contains("goto ->start  ; 12 more data bytes"));
         assert!(listing.contains(&format!("call L_{jump:08x}")));
     }
 
@@ -271,14 +295,21 @@ mod tests {
         script.appendix = block(b"Hello.\0");
         script.actions[0].params[0].p0 = script.appendix_offset();
         let code = script.code_offset();
-        assert!(disassemble(&script).contains(&format!("{code:08x}  op_4ba \"Hello.\"")));
+        assert!(disassemble(&script).contains(&format!("{code:08x}  text_line \"Hello.\"")));
         assert_eq!(strings(&script), format!("{code:08x}\tHello.\n"));
     }
 
     #[test]
     fn mnemonics_for_high_opcodes_are_short() {
         assert_eq!(mnemonic(0xffff_ff14), "op_ff14");
-        assert_eq!(mnemonic(0x4ba), "op_4ba");
+        assert_eq!(mnemonic(0x4bc), "op_4bc");
+    }
+
+    #[test]
+    fn verified_opcodes_have_names() {
+        assert_eq!(mnemonic(0x4ba), "text_line");
+        assert_eq!(mnemonic(0x003), "if_false_goto");
+        assert_eq!(opcode_name(0x4bc), None);
     }
 
     #[test]
