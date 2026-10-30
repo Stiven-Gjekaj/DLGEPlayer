@@ -1,0 +1,7 @@
+# Code owners for DLGE Player.
+# GitHub asks these owners to review each pull request that changes a
+# matching file.
+# See https://docs.github.com/articles/about-code-owners for the format.
+
+# The default owner of each file in the repository.
+* @Stiven-Gjekaj
