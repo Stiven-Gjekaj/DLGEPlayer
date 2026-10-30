@@ -87,20 +87,19 @@ impl<'a> DataBlock<'a> {
             return None;
         }
         let (text, _, had_errors) = encoding_rs::SHIFT_JIS.decode(raw);
-        (!had_errors).then(|| text.into_owned())
+        let bad_char = |c: char| {
+            (c.is_control() && c != '\t' && c != '\n') || c == '\u{fffe}' || c == '\u{ffff}'
+        };
+        (!had_errors && !text.chars().any(bad_char)).then(|| text.into_owned())
     }
 
     /// Tells if the block is more likely text than an integer.
     ///
-    /// A one-word block is text only if it starts with a Shift-JIS lead
-    /// byte, or holds two or more characters. The integer 0x22, for
-    /// example, also reads as the text `"`.
+    /// A one-word block is text only if it has two or more bytes before
+    /// the zero byte. The integer 0x22, for example, also reads as the
+    /// text `"`.
     pub fn looks_like_text(&self) -> bool {
-        let Some(_) = self.as_text() else {
-            return false;
-        };
-        let raw = self.text_bytes();
-        self.bytes.len() > 4 || raw[0] >= 0x80 || raw.len() >= 2
+        self.as_text().is_some() && (self.bytes.len() > 4 || self.text_bytes().len() >= 2)
     }
 }
 
@@ -198,6 +197,22 @@ mod tests {
         let b = DataBlock::parse(&bytes).unwrap();
         assert_eq!(b.as_text().as_deref(), Some("\""));
         assert!(!b.looks_like_text());
+    }
+
+    #[test]
+    fn high_integers_are_not_text() {
+        for value in [0x80u32, 0xffff_ffff, 0x9f] {
+            let bytes = block(0, &value.to_le_bytes());
+            let b = DataBlock::parse(&bytes).unwrap();
+            assert!(!b.looks_like_text(), "{value:#x}");
+        }
+    }
+
+    #[test]
+    fn one_double_byte_character_is_text() {
+        // "あ" in Shift-JIS.
+        let bytes = block(0, &[0x82, 0xa0, 0, 0]);
+        assert!(DataBlock::parse(&bytes).unwrap().looks_like_text());
     }
 
     #[test]
