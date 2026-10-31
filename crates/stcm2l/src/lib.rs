@@ -1,5 +1,6 @@
 //! Reads and writes STCM2L script files.
 
+pub mod decode;
 pub mod disasm;
 mod error;
 pub mod operand;
