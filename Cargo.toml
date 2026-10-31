@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/bea",
+    "crates/bntx",
     "crates/cpk",
     "crates/stcm2l",
     "crates/importer",
@@ -21,6 +22,7 @@ description = "An open-source player for Diabolik Lovers Grand Edition"
 
 [workspace.dependencies]
 bea = { path = "crates/bea" }
+bntx = { path = "crates/bntx" }
 cpk = { path = "crates/cpk" }
 stcm2l = { path = "crates/stcm2l" }
 importer = { path = "crates/importer" }
