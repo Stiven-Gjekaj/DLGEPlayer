@@ -314,6 +314,7 @@ dependencies = [
  "bntx",
  "cpk",
  "cridecoder",
+ "lyt",
  "png",
  "rayon",
  "sarc",

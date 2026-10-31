@@ -12,6 +12,7 @@ bea.workspace = true
 bntx.workspace = true
 cpk.workspace = true
 cridecoder = "0.3.7"
+lyt.workspace = true
 png = "0.18.1"
 rayon = "1"
 sarc.workspace = true

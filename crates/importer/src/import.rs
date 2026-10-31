@@ -13,7 +13,9 @@
 //! | `tables/<name>.json` | each `BIN_` table of `Archive/static~*.bin` |
 //! | `images/<group>/<name>.png` | each standalone texture |
 //! | `sprites/<name>.png` | each character sprite sheet |
-//! | `ui/<layout>/<name>.png` | each texture of a UI layout |
+//! | `ui/<archive>/<name>.png` | each texture of a UI layout archive |
+//! | `ui/<archive>/layouts/<name>.json` | each `.bflyt` layout |
+//! | `ui/<archive>/animations/<name>.json` | each `.bflan` animation |
 //! | `audio/<group>/<name>.ogg` | each HCA file of the audio archives |
 //! | `movies/<name>.mp4` | each movie, as it is |
 
@@ -128,6 +130,14 @@ pub struct AudioEntry {
     pub loop_start: Option<u64>,
 }
 
+/// The files of one UI layout archive. Each map gives the files by name.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct UiEntry {
+    pub textures: BTreeMap<String, String>,
+    pub layouts: BTreeMap<String, String>,
+    pub animations: BTreeMap<String, String>,
+}
+
 /// A file that the importer could not convert.
 #[derive(Debug, Clone, Serialize)]
 pub struct Failure {
@@ -145,8 +155,8 @@ pub struct Manifest {
     /// The images by group, then by name.
     pub images: BTreeMap<String, BTreeMap<String, String>>,
     pub sprites: BTreeMap<String, SpriteEntry>,
-    /// The UI textures by layout, then by name.
-    pub ui: BTreeMap<String, BTreeMap<String, String>>,
+    /// The UI files by layout archive.
+    pub ui: BTreeMap<String, UiEntry>,
     /// The audio by group, then by name.
     pub audio: BTreeMap<String, BTreeMap<String, AudioEntry>>,
     pub movies: BTreeMap<String, String>,
@@ -206,8 +216,22 @@ pub fn run(
     ));
 
     import_ui(source, out, &archives, &manifest, &fail);
-    let ui: usize = manifest.lock().unwrap().ui.values().map(|g| g.len()).sum();
-    progress(&format!("UI textures: {ui}"));
+    let (textures, layouts, animations) =
+        manifest
+            .lock()
+            .unwrap()
+            .ui
+            .values()
+            .fold((0, 0, 0), |(t, l, a), e| {
+                (
+                    t + e.textures.len(),
+                    l + e.layouts.len(),
+                    a + e.animations.len(),
+                )
+            });
+    progress(&format!(
+        "UI: {textures} textures, {layouts} layouts, {animations} animations"
+    ));
 
     for (archive, group) in AUDIO {
         if !options.audio_groups.is_empty() && !options.audio_groups.iter().any(|g| g == group) {
@@ -475,34 +499,36 @@ fn import_ui(
         };
         for entry in parsed.entries.iter().filter(|e| e.name.ends_with(".lyt")) {
             let layout = stem(&entry.name).to_string();
-            let result = (|| -> Result<BTreeMap<String, String>> {
+            let result = (|| -> Result<UiEntry> {
                 let data = parsed.read(entry)?;
-                let mut files = BTreeMap::new();
+                let mut files = UiEntry::default();
                 for f in sarc::parse(&data)? {
-                    if !f.data.starts_with(b"BNTX") {
-                        continue;
-                    }
-                    for t in bntx::parse(f.data)? {
-                        let file = format!("ui/{layout}/{}.png", t.name);
-                        write(
-                            out,
-                            &file,
-                            &image::encode_png(t.width, t.height, &t.to_rgba8()?)?,
-                        )?;
-                        files.insert(t.name.clone(), file);
+                    let name = stem(&f.name).to_string();
+                    if f.data.starts_with(b"BNTX") {
+                        for t in bntx::parse(f.data)? {
+                            let file = format!("ui/{layout}/{}.png", t.name);
+                            write(
+                                out,
+                                &file,
+                                &image::encode_png(t.width, t.height, &t.to_rgba8()?)?,
+                            )?;
+                            files.textures.insert(t.name.clone(), file);
+                        }
+                    } else if f.data.starts_with(lyt::MAGIC) {
+                        let file = format!("ui/{layout}/layouts/{name}.json");
+                        write(out, &file, &serde_json::to_vec(&lyt::parse(f.data)?)?)?;
+                        files.layouts.insert(name, file);
+                    } else if f.data.starts_with(lyt::anim::MAGIC) {
+                        let file = format!("ui/{layout}/animations/{name}.json");
+                        write(out, &file, &serde_json::to_vec(&lyt::anim::parse(f.data)?)?)?;
+                        files.animations.insert(name, file);
                     }
                 }
                 Ok(files)
             })();
             match result {
                 Ok(files) => {
-                    manifest
-                        .lock()
-                        .unwrap()
-                        .ui
-                        .entry(layout)
-                        .or_default()
-                        .extend(files);
+                    manifest.lock().unwrap().ui.insert(layout, files);
                 }
                 Err(e) => fail(&format!("{path}/{}", entry.name), e),
             }
