@@ -32,8 +32,8 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 
 ## Risks
 
-1. The `.bea` format has no public description that we know of. The character sprites can be parts with motion data, not flat images.
+1. The character sprites are sheets with patches for the eyes and the mouth. The player needs the positions of the patches, probably from `static/chara.bin`. The format of that table is not decoded yet.
 2. The menus of the game are in Bezel layouts. The player can need new menus that we make by hand.
-3. The `.hca` audio can have an encryption key. This is not examined yet.
+3. The `.hca` audio is not encrypted. The music and the sound effects were all checked. The voices were checked in a sample.
 4. The format of the English patch is not known until we have the files.
 5. The voice archive is 2.6 GB. Mobile devices need a smaller format, for example Opus at a low bit rate.
