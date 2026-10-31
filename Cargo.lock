@@ -82,6 +82,7 @@ name = "bntx"
 version = "0.1.0"
 dependencies = [
  "bcdec_rs",
+ "bea",
  "tegra_swizzle",
 ]
 
