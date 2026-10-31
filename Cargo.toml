@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/bea",
     "crates/cpk",
     "crates/stcm2l",
     "crates/importer",
@@ -19,6 +20,7 @@ repository = "https://github.com/Stiven-Gjekaj/DLGEPlayer"
 description = "An open-source player for Diabolik Lovers Grand Edition"
 
 [workspace.dependencies]
+bea = { path = "crates/bea" }
 cpk = { path = "crates/cpk" }
 stcm2l = { path = "crates/stcm2l" }
 importer = { path = "crates/importer" }
