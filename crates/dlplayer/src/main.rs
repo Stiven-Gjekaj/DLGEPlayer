@@ -37,6 +37,18 @@ enum Command {
     },
     /// Write the first texture of a .bea or a .bntx file as a PNG image.
     Texture { file: PathBuf, out: PathBuf },
+    /// Print a BIN_ table from a .bea file as tab-separated text.
+    Table { file: PathBuf },
+    /// Write a character sprite with an expression as a PNG image.
+    Sprite {
+        /// The Archive directory of the RomFS dump.
+        archives: PathBuf,
+        /// The sprite name, for example 01_aya_01_A.
+        name: String,
+        /// The expression name, for example emi. Without it, print the names.
+        expression: Option<String>,
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -71,6 +83,13 @@ fn main() -> ExitCode {
             BeaCommand::Extract { archive, out } => bea_extract(&archive, &out),
         },
         Command::Texture { file, out } => texture(&file, &out),
+        Command::Table { file } => table(&file),
+        Command::Sprite {
+            archives,
+            name,
+            expression,
+            out,
+        } => sprite(&archives, &name, expression.as_deref(), out.as_deref()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -210,6 +229,80 @@ fn bea_extract(path: &Path, out: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Reads the first file of a .bea archive.
+fn read_bea_first(path: &Path) -> Result<Vec<u8>> {
+    let bytes = read_file(path)?;
+    let archive = bea::Archive::parse(&bytes)?;
+    let entry = archive.entries.first().ok_or("the archive is empty")?;
+    Ok(archive.read(entry)?)
+}
+
+fn table(path: &Path) -> Result<()> {
+    let data = read_file(path)?;
+    let data = if data.starts_with(bea::MAGIC) {
+        read_bea_first(path)?
+    } else {
+        data
+    };
+    let table = bea::table::Table::parse(&data)?;
+    println!("{}", table.columns);
+    for row in &table.rows {
+        let cells: Vec<String> = row
+            .iter()
+            .map(|c| match c {
+                bea::table::Cell::Int(v) => v.to_string(),
+                bea::table::Cell::Text(s) => s.clone(),
+            })
+            .collect();
+        println!("{}", cells.join("\t"));
+    }
+    Ok(())
+}
+
+fn sprite(archives: &Path, name: &str, expression: Option<&str>, out: Option<&Path>) -> Result<()> {
+    let table = bea::table::Table::parse(&read_bea_first(
+        &archives.join("static~chara.bin.nxonnx32.bea"),
+    )?)?;
+    let row = table
+        .rows
+        .iter()
+        .find(|r| r[0].as_text() == Some(name))
+        .ok_or_else(|| format!("no sprite {name} in chara.bin"))?;
+    let sprite = importer::sprite::Sprite::from_row(row)?;
+    let Some(expression) = expression else {
+        for e in &sprite.expressions {
+            println!("{}", e.name);
+        }
+        return Ok(());
+    };
+    let index = sprite
+        .expressions
+        .iter()
+        .position(|e| e.name == expression)
+        .ok_or_else(|| format!("{name} has no expression {expression}"))?;
+    let textures = bntx::parse(&read_bea_first(
+        &archives.join(format!("{name}.nxonnx32.bea")),
+    )?)?;
+    let sheet = textures
+        .first()
+        .ok_or("the sprite has no texture")?
+        .to_rgba8()?;
+    let rgba = sprite.compose(&sheet, index, 0, 0)?;
+    let out = out.ok_or("give an output file")?;
+    write_png(out, sprite.body.x, sprite.body.y, &rgba)?;
+    eprintln!("{name} {expression}: {}x{}", sprite.body.x, sprite.body.y);
+    Ok(())
+}
+
+fn write_png(out: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<()> {
+    let file = std::fs::File::create(out)?;
+    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header()?.write_image_data(rgba)?;
+    Ok(())
+}
+
 fn texture(path: &Path, out: &Path) -> Result<()> {
     let bytes = read_file(path)?;
     let bntx_bytes = if bytes.starts_with(bea::MAGIC) {
@@ -226,11 +319,7 @@ fn texture(path: &Path, out: &Path) -> Result<()> {
     let textures = bntx::parse(&bntx_bytes)?;
     let t = textures.first().ok_or("the file holds no texture")?;
     let rgba = t.to_rgba8()?;
-    let file = std::fs::File::create(out)?;
-    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), t.width, t.height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.write_header()?.write_image_data(&rgba)?;
+    write_png(out, t.width, t.height, &rgba)?;
     eprintln!(
         "{}: {}x{}, format {:#x}",
         t.name, t.width, t.height, t.format_code
