@@ -157,8 +157,8 @@ pub fn decode(format: Format, width: u32, height: u32, linear: &[u8]) -> Result<
             let src = linear
                 .get(..w * h)
                 .ok_or(Error::OutOfBounds("pixel data"))?;
-            for (px, &v) in out.chunks_exact_mut(4).zip(src) {
-                px.copy_from_slice(&[v, v, v, 255]);
+            for (px, &v) in out.as_chunks_mut::<4>().0.iter_mut().zip(src) {
+                *px = [v, v, v, 255];
             }
         }
         Format::Rgba8 => {
