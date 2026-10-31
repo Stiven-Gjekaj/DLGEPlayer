@@ -282,6 +282,7 @@ version = "0.1.0"
 dependencies = [
  "bea",
  "cridecoder",
+ "png",
  "serde",
  "serde_json",
  "stcm2l",
