@@ -9,6 +9,8 @@ repository.workspace = true
 
 [dependencies]
 bea.workspace = true
+cridecoder = "0.3.7"
+vorbis_rs = { version = "0.5.6", default-features = false }
 
 [dev-dependencies]
 stcm2l.workspace = true
