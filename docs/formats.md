@@ -63,9 +63,27 @@ Each sprite archive, for example `01_aya_01_A`, holds one texture
 a grid of patches for the eyes and the mouth. The game makes an expression
 when it draws a patch on the face.
 
-`static/chara.bin` probably holds the positions of the patches. It has 878
-rows, one for each sprite archive. Each row has the types
-`siiiiiiiiiiii`: a name and 12 integers.
+`static/chara.bin` holds the positions of the patches. It has 878 rows,
+one for each sprite archive. A row has 13 groups of a name and 12
+integers. The first group describes the sheet:
+
+| Index | Value |
+|---|---|
+| 0, 1 | the width and the height of the sheet |
+| 2, 3 | the width and the height of the body, at the top-left corner |
+| 4, 5 | the width and the height of an eye patch |
+| 6, 7 | the position of the eye patch on the body |
+| 8, 9 | the width and the height of a mouth patch |
+| 10, 11 | the position of the mouth patch on the body |
+
+Each other group is an expression, for example `emi`, `tujo`, or
+`metoji`. Its 12 integers are 6 positions in the sheet: 3 eye patches for
+a blink, and then 3 mouth patches for speech. A group with an empty name
+and the values -1 is not used.
+
+All 878 rows give the size of their texture. All 9969 frames of the
+expressions are inside their sheet and their body. `dlplayer sprite`
+builds a sprite with an expression.
 
 ## BIN_ tables
 
@@ -80,10 +98,26 @@ The `static/*.bin` files use the format `BIN_`. The header:
 | 0x14 | the offset of the string offsets, u32 each |
 | 0x18 | the offset of the strings |
 
-The first string gives the types of the fields: `s` for a string, `i` for
-an integer. In `static/flag.bin`, the types are `si`, and the strings after
-the first one are the flag names. The encoding of the values is not known
-yet. It does not agree between `bgm.bin` and `chara.bin`.
+The first string gives the type of each column: `s` for a string, `i` for
+an integer. The table keeps its values column by column. The strings after
+the first one are all rows of the first string column, then all rows of
+the next one. The integers are i16 values, kept in the same way. The
+number of integer slots is a multiple of 2. The strings are Shift-JIS.
+
+| Table | Columns | Rows | Contents |
+|---|---|---|---|
+| `bg.bin` | `ssiis` | 795 | background name, file, number, a value, place name |
+| `bgm.bin` | `is` | 32 | music number, title |
+| `chara.bin` | 13 x `siiiiiiiiiiii` | 878 | sprite layouts |
+| `ev.bin` | `ssiiii` | 310 | event picture name, file, number, flags |
+| `flag.bin` | `si` | 12 | flag name, start value |
+| `flagsys.bin` | `si` | 964 | system flag name, start value |
+| `script.bin` | `iis` | 706 | game, number, script name |
+| `select.bin` | `ssiii` | 1002 | choice name, choice text, 3 values |
+| `speaker.bin` | `iss` | 181 | speaker number, display name, voice prefix |
+
+The English patch replaces `bg.bin`, `select.bin`, and `speaker.bin`. The
+patched `speaker.bin` has the English names.
 
 ## Audio
 
@@ -212,7 +246,6 @@ such as `’` and `ー`. It has name tokens such as `#Name[2]`.
 
 ## Known open items
 
-- The encoding of the values in the `BIN_` tables.
 - The textures inside the `.lyt` layouts, and the formats `0x1505`, `0x201`,
   and `0x1905`.
 
