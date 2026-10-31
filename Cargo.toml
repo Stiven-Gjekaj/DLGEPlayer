@@ -7,6 +7,7 @@ members = [
     "crates/stcm2l",
     "crates/importer",
     "crates/sarc",
+    "crates/lyt",
     "crates/vm",
     "crates/player",
     "crates/dlplayer",
@@ -28,4 +29,5 @@ cpk = { path = "crates/cpk" }
 stcm2l = { path = "crates/stcm2l" }
 importer = { path = "crates/importer" }
 sarc = { path = "crates/sarc" }
+lyt = { path = "crates/lyt" }
 vm = { path = "crates/vm" }
