@@ -17,6 +17,12 @@
 - The listing shows a voice number as a number, not as two letters.
 - `stcm2l::decode` turns each action into a typed instruction. All actions
   of the 706 JP and the 706 EN scripts decode.
+- The `bea` crate reads Bezel Engine archives. All 2177 files of the 2097
+  archives in `Archive/` read.
+- The `bntx` crate decodes BNTX textures. All 2029 textures in `Archive/`
+  decode.
+- `dlplayer bea list`, `dlplayer bea extract`, and `dlplayer texture` read
+  archives and write a texture as a PNG image.
 - `dlplayer cpk list` and `dlplayer cpk extract` read archives.
 - `dlplayer disasm` prints the listing or the text of one script.
 - `dlplayer dump-scripts` writes a listing and a text file for each script
