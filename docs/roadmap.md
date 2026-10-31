@@ -32,7 +32,7 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 
 ## Risks
 
-1. The character sprites are sheets with patches for the eyes and the mouth. The player needs the positions of the patches, probably from `static/chara.bin`. The format of that table is not decoded yet.
+1. The character sprites are sheets with patches for the eyes and the mouth. `static/chara.bin` gives the positions, and the `importer` crate builds a sprite with an expression. The scripts must still map their sprite and expression names to these rows.
 2. The menus of the game are in Bezel layouts. The player can need new menus that we make by hand.
 3. The `.hca` audio is not encrypted. The music and the sound effects were all checked. The voices were checked in a sample.
 4. The format of the English patch is not known until we have the files.
