@@ -24,6 +24,73 @@ Names in `Archive/` use `~` for `/`. For example,
 `texture~bg~bg01b.dds.nxonnx32.bea` holds the texture `texture/bg/bg01b.dds`.
 The script prefix `mb_` is MORE,BLOOD. The prefix `ve_` is Haunted Dark Bridal.
 
+## Bezel Engine archives
+
+A `.bea` file has the magic `SCNE`. The `bea` crate reads it.
+
+- The header gives the number of files and an array of offsets to `ASST`
+  blocks.
+- An `ASST` block gives the compression, the sizes, the data offset, and the
+  name of one file, for example `texture/bg/bg01b.dds`.
+- All 2196 files of the dump use zstd compression (type 2).
+
+The files in the archives:
+
+| Type | Count | Contents |
+|---|---|---|
+| `.dds` | 2031 | BNTX textures |
+| `.lyt` | 84 | SARC archives with UI layouts |
+| `.lua` | 41 | Lua scripts of the menus, magic `BZLA` |
+| `.bfsha` | 14 | shaders |
+| `.bin` | 10 | `BIN_` tables, for example `static/chara.bin` |
+| `.mp4` | 9 | XML movie descriptions |
+| `.csv` | 3 | text tables |
+| other | 4 | 2 `.ftxb` textures, 1 font, 1 entity |
+
+## BNTX textures
+
+A `.dds` file in an archive is a BNTX texture. The `bntx` crate decodes it.
+
+- 2029 of the 2031 textures use format `0x2006`, BC7 sRGB. The data uses the
+  block-linear layout of the Tegra X1.
+- All 2029 textures in `Archive/` decode. The test reads every one.
+- Backgrounds and event pictures are 1920x1080.
+
+## Character sprites
+
+Each sprite archive, for example `01_aya_01_A`, holds one texture
+`chara/<name>/base.dds`. The texture is a sheet. It holds the full body and
+a grid of patches for the eyes and the mouth. The game makes an expression
+when it draws a patch on the face.
+
+`static/chara.bin` probably holds the positions of the patches. It has 878
+rows, one for each sprite archive. Each row has the types
+`siiiiiiiiiiii`: a name and 12 integers.
+
+## BIN_ tables
+
+The `static/*.bin` files use the format `BIN_`. The header:
+
+| Offset | Value |
+|---|---|
+| 0x06 | the number of rows, as a u16 |
+| 0x08 | a count, as a u32 |
+| 0x0c | the number of strings, as a u32 |
+| 0x10 | the offset of the values |
+| 0x14 | the offset of the string offsets, u32 each |
+| 0x18 | the offset of the strings |
+
+The first string gives the types of the fields: `s` for a string, `i` for
+an integer. In `static/flag.bin`, the types are `si`, and the strings after
+the first one are the flag names. The encoding of the values is not known
+yet. It does not agree between `bgm.bin` and `chara.bin`.
+
+## Audio
+
+The `.hca` files are not encrypted. All 418 files of `bgm.cpk` and `se.cpk`
+have the cipher type 0. A sample of 763 files of `voice.cpk`, every 50th
+file, also has the cipher type 0. ffmpeg decodes them.
+
 ## CPK
 
 A CPK file has chunks. A chunk has a 4-byte magic number, 4 unknown bytes,
@@ -144,6 +211,10 @@ The text is Shift-JIS. It is mostly ASCII, with some Shift-JIS punctuation
 such as `’` and `ー`. It has name tokens such as `#Name[2]`.
 
 ## Known open items
+
+- The encoding of the values in the `BIN_` tables.
+- The textures inside the `.lyt` layouts, and the formats `0x1505`, `0x201`,
+  and `0x1905`.
 
 - The text has some rare characters where the context needs punctuation.
   For example, `ゞ` appears after `なに`. The font of the game possibly
