@@ -15,6 +15,8 @@
 - The listing names the opcodes whose meaning is verified, such as
   `text_line`, `voice`, and `if_false_goto`.
 - The listing shows a voice number as a number, not as two letters.
+- `stcm2l::decode` turns each action into a typed instruction. All actions
+  of the 706 JP and the 706 EN scripts decode.
 - `dlplayer cpk list` and `dlplayer cpk extract` read archives.
 - `dlplayer disasm` prints the listing or the text of one script.
 - `dlplayer dump-scripts` writes a listing and a text file for each script
