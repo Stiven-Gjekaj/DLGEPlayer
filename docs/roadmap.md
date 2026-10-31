@@ -6,9 +6,9 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 | Phase | Goal | Done when |
 |---|---|---|
 | 1 | Read CPK, CRILAYLA, and STCM2L. Write the scripts as text. | All 706 scripts write to text. Done. |
-| 2 | Find the meaning of the 76 opcodes: text, speaker, voice, choice, jump, flag, background, sprite, music, and transition. | A typed decoder knows each action in the corpus. `docs/opcodes.md` describes the opcodes. |
-| 3 | Read the Bezel Engine `.bea` archives: textures, sprite and motion data, and UI layouts. | Each background, event image, and character sprite exports to PNG. |
-| 4 | Make the importer. It converts the RomFS one time into a normalized folder: scripts as IR, PNG or WebP images, Opus audio, MP4 movies, and `manifest.json`. | One command makes the folder from a dump. |
+| 2 | Find the meaning of the 76 opcodes: text, speaker, voice, choice, jump, flag, background, sprite, music, and transition. | A typed decoder knows each action in the corpus. `docs/opcodes.md` describes the opcodes. Done. |
+| 3 | Read the Bezel Engine `.bea` archives: textures, sprite and motion data, and UI layouts. | Each background, event image, and character sprite exports to PNG. Done. |
+| 4 | Make the importer. It converts the RomFS one time into a normalized folder: scripts as IR, PNG images, Ogg Vorbis audio, MP4 movies, and `manifest.json`. | One command makes the folder from a dump. Done. |
 | 5 | Make the VM. It runs the IR with no screen. It keeps flags, globals, saves, and choices. | Each route runs from start to end with no screen. A report shows the coverage. |
 | 6 | Make the desktop player with Godot 4 and gdext: text box, backlog, choices, images, audio, transitions, launcher, saves for each game, gallery, and settings. | Both games play on macOS, Windows, and Linux. |
 | 7 | Make the mobile player: touch controls, import on the device, and a small storage size. | Both games play on Android and iOS. |
@@ -32,8 +32,17 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 
 ## Risks
 
-1. The character sprites are sheets with patches for the eyes and the mouth. `static/chara.bin` gives the positions, and the `importer` crate builds a sprite with an expression. The `Catalog` resolves the sprite names of the scripts. Only the expression `tyo` is not found.
-2. The menus of the game are 41 Lua scripts and 521 NintendoWare `.bflyt` layouts. The textures of the layouts decode. The layouts and the Lua scripts are not decoded yet. The player can need new menus that we make by hand.
-3. The `.hca` audio is not encrypted. The music and the sound effects were all checked. The voices were checked in a sample.
-4. The format of the English patch is not known until we have the files.
-5. The voice archive is 2.6 GB. Mobile devices need a smaller format, for example Opus at a low bit rate.
+1. The menus of the game are 41 Lua 5.2 bytecode scripts and 521
+   NintendoWare layouts. The importer writes the layouts and their
+   animations as JSON. The Lua scripts are not converted, so the player
+   must make the menu logic again.
+2. Godot plays only Ogg Theora video. The 9 movies are MP4. Phase 6 must
+   find a way to play them, for example a video extension or a conversion
+   on the computer of the user.
+3. The import folder is 6.6 GB. Mobile devices need smaller files, for
+   example a lower Vorbis quality and WebP images.
+4. 3 opcodes in the scripts have no handler in the game (`0x64f`, `0x69b`,
+   `0x69c`). About 25 engine opcodes have no verified meaning. The VM of
+   phase 5 must find what they do.
+5. The English patch uses name tokens such as `#Name[2]` and some
+   characters that need the font of the game. Phase 8 must map them.
