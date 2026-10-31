@@ -156,6 +156,30 @@ public class DlQuery extends GhidraScript {
                     }
                     break;
                 }
+                case "asm": {
+                    // Prints instructions: "asm:<addr>,<count>".
+                    String[] q = p[1].split(",");
+                    Address a = addr(q[0]);
+                    int n = q.length > 1 ? Integer.parseInt(q[1]) : 20;
+                    if (getInstructionAt(a) == null) disassemble(a);
+                    Instruction ins = getInstructionAt(a);
+                    for (int k = 0; k < n && ins != null; k++) {
+                        println(ins.getAddress() + "  " + ins);
+                        ins = ins.getNext();
+                    }
+                    break;
+                }
+                case "jt": {
+                    // Prints the targets of a table of 32-bit offsets: "jt:<table>,<count>".
+                    String[] q = p[1].split(",");
+                    Address t = addr(q[0]);
+                    int n = Integer.parseInt(q[1]);
+                    for (int k = 0; k < n; k++) {
+                        int off = getInt(t.add(4L * k));
+                        println(k + " " + t.add(off));
+                    }
+                    break;
+                }
                 default: println("unknown command");
             }
         }
