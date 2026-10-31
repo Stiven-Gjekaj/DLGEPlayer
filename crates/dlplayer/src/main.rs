@@ -412,11 +412,7 @@ fn layout(path: &Path, out: &Path) -> Result<()> {
 }
 
 fn write_png(out: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<()> {
-    let file = std::fs::File::create(out)?;
-    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), width, height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.write_header()?.write_image_data(rgba)?;
+    std::fs::write(out, importer::image::encode_png(width, height, rgba)?)?;
     Ok(())
 }
 

@@ -234,7 +234,6 @@ dependencies = [
  "clap",
  "cpk",
  "importer",
- "png",
  "sarc",
  "stcm2l",
 ]
