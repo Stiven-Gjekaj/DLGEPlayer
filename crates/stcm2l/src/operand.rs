@@ -96,15 +96,16 @@ impl<'a> DataBlock<'a> {
 
     /// Tells if the block is more likely text than an integer.
     ///
-    /// A one-word block is text only if it starts with a Shift-JIS lead
-    /// byte or holds three characters. An integer such as 30063 also reads
-    /// as the two letters `ou`, and the integer 0x22 reads as `"`.
+    /// A one-word block is text only if it holds three characters, or one
+    /// double-byte Shift-JIS character. An integer such as 30063 also reads
+    /// as the two letters `ou`, and the integer 202 reads as the half-width
+    /// kana `ﾊ`.
     pub fn looks_like_text(&self) -> bool {
         let Some(_) = self.as_text() else {
             return false;
         };
         let raw = self.text_bytes();
-        self.bytes.len() > 4 || raw[0] >= 0x80 || raw.len() >= 3
+        self.bytes.len() > 4 || raw.len() >= 3 || (raw.len() == 2 && raw[0] >= 0x80)
     }
 }
 
@@ -234,6 +235,14 @@ mod tests {
         // "あ" in Shift-JIS.
         let bytes = block(0, &[0x82, 0xa0, 0, 0]);
         assert!(DataBlock::parse(&bytes).unwrap().looks_like_text());
+    }
+
+    #[test]
+    fn one_byte_is_an_integer() {
+        let bytes = block(0, &202u32.to_le_bytes());
+        let b = DataBlock::parse(&bytes).unwrap();
+        assert_eq!(b.as_text().as_deref(), Some("ﾊ"));
+        assert!(!b.looks_like_text());
     }
 
     #[test]
