@@ -18,6 +18,7 @@
 //! | `ui/<archive>/animations/<name>.json` | each `.bflan` animation |
 //! | `audio/<group>/<name>.ogg` | each HCA file of the audio archives |
 //! | `audio/system/<cue>.ogg` | each cue of `SystemSE.acb`, the menu sounds |
+//! | `lip.json` | the mouth states of each voice in `lip.cpk`, by voice number |
 //! | `movies/<name>.mp4` | each movie, as it is |
 
 use std::collections::BTreeMap;
@@ -29,7 +30,7 @@ use std::sync::Mutex;
 use rayon::prelude::*;
 use serde::Serialize;
 
-use crate::{adx, audio, image, ir, sprite};
+use crate::{adx, audio, image, ir, lip, sprite};
 
 /// The version of the folder format. A change that the player cannot
 /// read makes a new version.
@@ -167,6 +168,8 @@ pub struct Manifest {
     /// The audio by group, then by name.
     pub audio: BTreeMap<String, BTreeMap<String, AudioEntry>>,
     pub movies: BTreeMap<String, String>,
+    /// The file of the lip sync data, if the dump has `lip.cpk`.
+    pub lip: Option<String>,
     pub failures: Vec<Failure>,
 }
 
@@ -287,6 +290,9 @@ fn run_in_pool(
             .map_or(0, |g| g.len());
         progress(&format!("audio {group}: {count}"));
     }
+
+    let voices = import_lip(source, out, &manifest, &fail)?;
+    progress(&format!("lip sync: {voices} voices"));
 
     import_movies(source, out, &manifest, &fail)?;
     progress(&format!(
@@ -688,6 +694,37 @@ fn import_acb(
             Err(e) => fail(&path, e),
         }
     });
+}
+
+/// Writes the data of all `.lip` files to one file. Gives the number of
+/// voices.
+fn import_lip(
+    source: &Source,
+    out: &Path,
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) -> Result<usize> {
+    let Some(mut archive) = open_cpk(source, "lip.cpk")? else {
+        return Ok(0);
+    };
+    let entries = archive.entries.clone();
+    let mut all = BTreeMap::new();
+    for entry in entries.iter().filter(|e| e.name.ends_with(".lip")) {
+        let result = archive
+            .read(entry)
+            .map_err(BoxError::from)
+            .and_then(|data| Ok(lip::parse(&data)?));
+        match result {
+            Ok(keys) => {
+                all.insert(stem(&entry.name).to_string(), keys);
+            }
+            Err(e) => fail(&format!("lip.cpk/{}", entry.path()), e),
+        }
+    }
+    let file = "lip.json".to_string();
+    write(out, &file, &serde_json::to_vec(&all)?)?;
+    manifest.lock().unwrap().lip = Some(file);
+    Ok(all.len())
 }
 
 fn import_movies(
