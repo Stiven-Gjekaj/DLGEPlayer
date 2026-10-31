@@ -42,6 +42,7 @@ const EXPORT_LEN: usize = 4 + EXPORT_NAME_LEN + 4;
 const COLLECTION_LINK_LEN: usize = 64;
 
 /// One parameter of an action.
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Param {
     pub p0: u32,

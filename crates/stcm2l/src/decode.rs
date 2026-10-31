@@ -10,6 +10,11 @@ use crate::operand::{DataBlock, Operand};
 use crate::script::{Action, Param, Script};
 
 /// The value of one parameter.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i32),
@@ -28,6 +33,11 @@ pub enum Value {
 }
 
 /// An operator of the built-in arithmetic opcodes.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
     Add,
@@ -59,6 +69,11 @@ const BINARY_OPS: [BinaryOp; 10] = [
 ];
 
 /// An operator of the comparison in `IfFalseGoto`.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compare {
     Gt,
@@ -79,6 +94,11 @@ const COMPARES: [Compare; 6] = [
 ];
 
 /// One typed instruction.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(tag = "type", rename_all = "snake_case")
+)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     /// Push a return frame and jump to the target. The arguments are the
@@ -648,6 +668,25 @@ mod tests {
                 opcode: 0x3fa,
                 args: vec![Value::Text("bg_black".into())],
             })
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn writes_instructions_as_json() {
+        let goto = Instruction::Goto { target: 7 };
+        assert_eq!(
+            serde_json::to_string(&goto).unwrap(),
+            r#"{"type":"goto","target":7}"#
+        );
+        let update = Instruction::Update {
+            op: Some(BinaryOp::Add),
+            dest: Value::Global(4),
+            value: Value::Int(1),
+        };
+        assert_eq!(
+            serde_json::to_string(&update).unwrap(),
+            r#"{"type":"update","op":"add","dest":{"global":4},"value":{"int":1}}"#
         );
     }
 }
