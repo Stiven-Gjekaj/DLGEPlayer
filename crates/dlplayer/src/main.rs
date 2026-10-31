@@ -16,6 +16,24 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Convert a RomFS dump into the folder that the player reads.
+    Import {
+        /// The RomFS folder of the dump.
+        romfs: PathBuf,
+        /// The output folder.
+        out: PathBuf,
+        /// A RomFS folder whose files replace the files of the dump, for
+        /// example the English patch. Give it more than one time for more
+        /// patches. The first patch has priority.
+        #[arg(long)]
+        patch: Vec<PathBuf>,
+        /// The Vorbis quality, from -0.2 to 1.0.
+        #[arg(long, default_value_t = 0.4)]
+        quality: f32,
+        /// Convert only these audio groups: bgm, se, loopse, voice.
+        #[arg(long, value_delimiter = ',')]
+        audio: Vec<String>,
+    },
     /// Work with CRI CPK archives.
     Cpk {
         #[command(subcommand)]
@@ -82,6 +100,13 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
+        Command::Import {
+            romfs,
+            out,
+            patch,
+            quality,
+            audio,
+        } => import(romfs, &out, patch, quality, audio),
         Command::Cpk { command } => match command {
             CpkCommand::List { archive } => cpk_list(&archive),
             CpkCommand::Extract { archive, out } => cpk_extract(&archive, &out),
@@ -303,6 +328,34 @@ fn sprite(archives: &Path, name: &str, expression: Option<&str>, out: Option<&Pa
     let out = out.ok_or("give an output file")?;
     write_png(out, sprite.body.x, sprite.body.y, &rgba)?;
     eprintln!("{name} {expression}: {}x{}", sprite.body.x, sprite.body.y);
+    Ok(())
+}
+
+fn import(
+    romfs: PathBuf,
+    out: &Path,
+    mut roots: Vec<PathBuf>,
+    quality: f32,
+    audio_groups: Vec<String>,
+) -> Result<()> {
+    roots.push(romfs);
+    let source = importer::import::Source { roots };
+    let options = importer::import::Options {
+        quality,
+        audio_groups,
+    };
+    let start = std::time::Instant::now();
+    let manifest = importer::import::run(&source, out, &options, &|line| {
+        eprintln!("[{:>6.1}s] {line}", start.elapsed().as_secs_f32())
+    })
+    .map_err(|e| e.to_string())?;
+    for failure in &manifest.failures {
+        eprintln!("failed: {}: {}", failure.path, failure.error);
+    }
+    if !manifest.failures.is_empty() {
+        return Err(format!("{} files did not convert", manifest.failures.len()).into());
+    }
+    eprintln!("wrote {}", out.join("manifest.json").display());
     Ok(())
 }
 
