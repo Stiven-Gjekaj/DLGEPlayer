@@ -297,7 +297,16 @@ pub fn decode(script: &Script, action: &Action) -> Result<Instruction, DecodeErr
                     found: 0,
                 });
             }
-            let id = all.remove(0);
+            // The file number is always an integer, even if its bytes
+            // look like text.
+            let first = Operand::of(script, action, &action.params[0]).block();
+            let id = match first.and_then(|b| b.as_i32()) {
+                Some(v) => {
+                    all.remove(0);
+                    Value::Int(v)
+                }
+                None => all.remove(0),
+            };
             Ok(if op == 0x462 {
                 Instruction::Voice { id, rest: all }
             } else {
@@ -560,6 +569,19 @@ mod tests {
             Ok(Instruction::Voice {
                 id: Value::Int(30063),
                 rest: vec![Value::Int(0)],
+            })
+        );
+    }
+
+    #[test]
+    fn a_voice_number_that_looks_like_text_is_an_integer() {
+        let script = empty_script();
+        let a = action(&script, 0x462, &[Some(block(&0x9fe0i32.to_le_bytes()))]);
+        assert_eq!(
+            decode(&script, &a),
+            Ok(Instruction::Voice {
+                id: Value::Int(0x9fe0),
+                rest: vec![],
             })
         );
     }

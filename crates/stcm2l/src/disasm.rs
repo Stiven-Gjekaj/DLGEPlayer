@@ -89,9 +89,17 @@ fn line(script: &Script, action: &Action, labels: &BTreeMap<u32, String>) -> Str
     let operands: Vec<String> = action
         .params
         .iter()
-        .map(|param| {
+        .enumerate()
+        .map(|(index, param)| {
             let operand = Operand::of(script, action, param);
-            let mut text = format_operand(&operand, labels, holds_text(action));
+            let hint = if holds_text(action) {
+                Hint::Text
+            } else if index == 0 && holds_audio_id(action) {
+                Hint::Int
+            } else {
+                Hint::Any
+            };
+            let mut text = format_operand(&operand, labels, hint);
             if operand.has_extra(param) {
                 let _ = write!(text, "{{{:#x},{:#x}}}", param.p1, param.p2);
             }
@@ -116,6 +124,23 @@ const TEXT_LINE: u32 = 0x4ba;
 /// of text such as "Oh" can look like an integer to the text test.
 fn holds_text(action: &Action) -> bool {
     !action.is_call() && action.opcode == TEXT_LINE
+}
+
+/// The opcodes of a voice and a sound effect. Param 0 is the file number.
+const AUDIO_IDS: [u32; 2] = [0x462, 0x464];
+
+/// Tells if param 0 of the action is the number of an audio file. Such a
+/// number can look like text to the text test, for example `ou` or `癧`.
+fn holds_audio_id(action: &Action) -> bool {
+    !action.is_call() && AUDIO_IDS.contains(&action.opcode)
+}
+
+/// What the opcode tells about the value of a data block.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Hint {
+    Text,
+    Int,
+    Any,
 }
 
 /// Gives the name of an opcode whose meaning is verified.
@@ -151,7 +176,7 @@ pub fn mnemonic(opcode: u32) -> String {
     }
 }
 
-fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>, text: bool) -> String {
+fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>, hint: Hint) -> String {
     match operand {
         Operand::Code(target) => format!(
             "->{}",
@@ -161,11 +186,11 @@ fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>, text: b
                 .unwrap_or_else(|| format!("{target:#x}"))
         ),
         Operand::Immediate(v) => format!("#{v:#x}"),
-        Operand::Local(_, block) | Operand::Appended(_, block) => format_block(block, text),
+        Operand::Local(_, block) | Operand::Appended(_, block) => format_block(block, hint),
         Operand::Global(offset, block) => {
             let value = block
                 .as_ref()
-                .map(|b| format_block(b, false))
+                .map(|b| format_block(b, Hint::Any))
                 .unwrap_or_default();
             format!("g{offset:#x}={value}")
         }
@@ -173,11 +198,16 @@ fn format_operand(operand: &Operand<'_>, labels: &BTreeMap<u32, String>, text: b
     }
 }
 
-fn format_block(block: &DataBlock<'_>, text: bool) -> String {
+fn format_block(block: &DataBlock<'_>, hint: Hint) -> String {
     if let Some(f) = block.as_f32() {
         return format!("{f:?}f");
     }
-    if (text || block.looks_like_text())
+    if hint == Hint::Int
+        && let Some(v) = block.as_i32()
+    {
+        return v.to_string();
+    }
+    if (hint == Hint::Text || block.looks_like_text())
         && let Some(text) = block.as_text()
     {
         return format!("\"{}\"", escape(&text));
@@ -318,6 +348,16 @@ mod tests {
         let code = script.code_offset();
         assert!(disassemble(&script).contains(&format!("{code:08x}  text_line \"Oh\"")));
         assert_eq!(strings(&script), format!("{code:08x}\tOh\n"));
+    }
+
+    #[test]
+    fn an_audio_number_stays_a_number() {
+        let mut script = sample();
+        // 0x9fe0 reads as one Shift-JIS character, but it is a voice number.
+        script.actions[0].opcode = 0x462;
+        script.actions[0].data = block(&0x9fe0u32.to_le_bytes());
+        let code = script.code_offset();
+        assert!(disassemble(&script).contains(&format!("{code:08x}  voice 40928")));
     }
 
     #[test]
