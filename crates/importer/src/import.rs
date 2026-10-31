@@ -1,0 +1,657 @@
+//! Converts a RomFS dump into the normalized folder that the player reads.
+//!
+//! The source is a list of RomFS roots. A file in an earlier root replaces
+//! the file with the same path in a later root. The English patch is a
+//! root that comes before the dump.
+//!
+//! The output folder:
+//!
+//! | Path | Contents |
+//! |---|---|
+//! | `manifest.json` | the list of all files, with their data |
+//! | `scripts/<name>.json` | the IR of each script |
+//! | `tables/<name>.json` | each `BIN_` table of `Archive/static~*.bin` |
+//! | `images/<group>/<name>.png` | each standalone texture |
+//! | `sprites/<name>.png` | each character sprite sheet |
+//! | `ui/<layout>/<name>.png` | each texture of a UI layout |
+//! | `audio/<group>/<name>.ogg` | each HCA file of the audio archives |
+//! | `movies/<name>.mp4` | each movie, as it is |
+
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+use rayon::prelude::*;
+use serde::Serialize;
+
+use crate::{audio, image, ir, sprite};
+
+/// The version of the folder format. A change that the player cannot
+/// read makes a new version.
+pub const FORMAT: u32 = 1;
+
+/// The suffix of the Switch archives in `Archive/`.
+const ARCHIVE_SUFFIX: &str = ".nxonnx32.bea";
+
+/// The audio archives, with the name of the output group.
+const AUDIO: [(&str, &str); 4] = [
+    ("bgm.cpk", "bgm"),
+    ("se.cpk", "se"),
+    ("loopse.cpk", "loopse"),
+    ("voice.cpk", "voice"),
+];
+
+/// The number of audio files that the importer reads before it converts
+/// them in parallel.
+const AUDIO_BATCH: usize = 256;
+
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+type Result<T> = std::result::Result<T, BoxError>;
+
+/// The settings of an import.
+#[derive(Debug, Clone)]
+pub struct Options {
+    /// The Vorbis quality, from -0.2 to 1.0.
+    pub quality: f32,
+    /// The audio groups to convert. All groups if empty.
+    pub audio_groups: Vec<String>,
+}
+
+impl Default for Options {
+    fn default() -> Options {
+        Options {
+            quality: 0.4,
+            audio_groups: Vec::new(),
+        }
+    }
+}
+
+/// A list of RomFS roots. The first root that holds a path gives the file.
+#[derive(Debug, Clone)]
+pub struct Source {
+    pub roots: Vec<PathBuf>,
+}
+
+impl Source {
+    /// Gives the file for a path in the RomFS.
+    pub fn resolve(&self, path: &str) -> Option<PathBuf> {
+        self.roots
+            .iter()
+            .map(|r| r.join(path))
+            .find(|p| p.is_file())
+    }
+
+    /// Gives the names of the files in a directory of all roots.
+    pub fn list(&self, dir: &str) -> Result<Vec<String>> {
+        let mut names = std::collections::BTreeSet::new();
+        for root in &self.roots {
+            let Ok(entries) = std::fs::read_dir(root.join(dir)) else {
+                continue;
+            };
+            for entry in entries {
+                let entry = entry?;
+                if entry.file_type()?.is_file() {
+                    names.insert(entry.file_name().to_string_lossy().into_owned());
+                }
+            }
+        }
+        Ok(names.into_iter().collect())
+    }
+
+    fn read(&self, path: &str) -> Result<Vec<u8>> {
+        let file = self
+            .resolve(path)
+            .ok_or_else(|| format!("{path} is not in the dump"))?;
+        Ok(std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?)
+    }
+}
+
+/// The data of one sprite sheet.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpriteEntry {
+    pub file: String,
+    #[serde(flatten)]
+    pub layout: sprite::Sprite,
+}
+
+/// The data of one audio file.
+#[derive(Debug, Clone, Serialize)]
+pub struct AudioEntry {
+    pub file: String,
+    pub sample_rate: u32,
+    pub channels: u32,
+    pub frames: u64,
+    /// The loop start in sample frames. The loop ends at the end of the file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loop_start: Option<u64>,
+}
+
+/// A file that the importer could not convert.
+#[derive(Debug, Clone, Serialize)]
+pub struct Failure {
+    pub path: String,
+    pub error: String,
+}
+
+/// The contents of `manifest.json`.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Manifest {
+    pub format: u32,
+    /// The scripts by name. Each value is the file.
+    pub scripts: BTreeMap<String, String>,
+    pub tables: BTreeMap<String, String>,
+    /// The images by group, then by name.
+    pub images: BTreeMap<String, BTreeMap<String, String>>,
+    pub sprites: BTreeMap<String, SpriteEntry>,
+    /// The UI textures by layout, then by name.
+    pub ui: BTreeMap<String, BTreeMap<String, String>>,
+    /// The audio by group, then by name.
+    pub audio: BTreeMap<String, BTreeMap<String, AudioEntry>>,
+    pub movies: BTreeMap<String, String>,
+    pub failures: Vec<Failure>,
+}
+
+/// Imports a dump into `out`. `progress` receives a line for each step.
+pub fn run(
+    source: &Source,
+    out: &Path,
+    options: &Options,
+    progress: &(dyn Fn(&str) + Sync),
+) -> Result<Manifest> {
+    std::fs::create_dir_all(out)?;
+    let manifest = Mutex::new(Manifest {
+        format: FORMAT,
+        ..Manifest::default()
+    });
+    let fail = |path: &str, error: BoxError| {
+        manifest.lock().unwrap().failures.push(Failure {
+            path: path.to_string(),
+            error: error.to_string(),
+        });
+    };
+
+    import_scripts(source, out, &manifest, &fail)?;
+    progress(&format!(
+        "scripts: {}",
+        manifest.lock().unwrap().scripts.len()
+    ));
+
+    let archives: Vec<String> = source
+        .list("Archive")?
+        .into_iter()
+        .filter(|n| n.ends_with(ARCHIVE_SUFFIX))
+        .collect();
+    import_tables(source, out, &archives, &manifest, &fail);
+    progress(&format!(
+        "tables: {}",
+        manifest.lock().unwrap().tables.len()
+    ));
+
+    import_images(source, out, &archives, &manifest, &fail);
+    let images: usize = manifest
+        .lock()
+        .unwrap()
+        .images
+        .values()
+        .map(|g| g.len())
+        .sum();
+    progress(&format!("images: {images}"));
+
+    import_sprites(source, out, &manifest, &fail);
+    progress(&format!(
+        "sprites: {}",
+        manifest.lock().unwrap().sprites.len()
+    ));
+
+    import_ui(source, out, &archives, &manifest, &fail);
+    let ui: usize = manifest.lock().unwrap().ui.values().map(|g| g.len()).sum();
+    progress(&format!("UI textures: {ui}"));
+
+    for (archive, group) in AUDIO {
+        if !options.audio_groups.is_empty() && !options.audio_groups.iter().any(|g| g == group) {
+            continue;
+        }
+        import_audio(
+            source,
+            out,
+            archive,
+            group,
+            options.quality,
+            &manifest,
+            &fail,
+        )?;
+        let count = manifest
+            .lock()
+            .unwrap()
+            .audio
+            .get(group)
+            .map_or(0, |g| g.len());
+        progress(&format!("audio {group}: {count}"));
+    }
+
+    import_movies(source, out, &manifest, &fail)?;
+    progress(&format!(
+        "movies: {}",
+        manifest.lock().unwrap().movies.len()
+    ));
+
+    let mut manifest = manifest.into_inner().unwrap();
+    manifest.failures.sort_by(|a, b| a.path.cmp(&b.path));
+    std::fs::write(
+        out.join("manifest.json"),
+        serde_json::to_vec_pretty(&manifest)?,
+    )?;
+    Ok(manifest)
+}
+
+/// Writes a file and makes its directory.
+fn write(out: &Path, relative: &str, data: &[u8]) -> Result<()> {
+    let path = out.join(relative);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, data).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(())
+}
+
+/// Gives the name of a file in an archive with no directory and no
+/// extension.
+fn stem(path: &str) -> &str {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    name.split_once('.').map_or(name, |(s, _)| s)
+}
+
+/// Splits the name of a texture archive, for example
+/// `texture~ev_thum~mb0610.dds.nxonnx32.bea`, into the group `ev_thum` and
+/// the name `mb0610`. A deeper path joins its groups with `/`.
+pub fn texture_name(archive: &str) -> Option<(String, String)> {
+    let rest = archive
+        .strip_prefix("texture~")?
+        .strip_suffix(ARCHIVE_SUFFIX)?;
+    let (group, name) = rest.rsplit_once('~')?;
+    Some((group.replace('~', "/"), stem(name).to_string()))
+}
+
+/// Gives the table name of an archive such as `static~chara.bin.nxonnx32.bea`.
+pub fn table_name(archive: &str) -> Option<&str> {
+    let rest = archive
+        .strip_prefix("static~")?
+        .strip_suffix(ARCHIVE_SUFFIX)?;
+    rest.strip_suffix(".bin")
+}
+
+/// Turns a `BIN_` table into JSON: the column types and the rows.
+pub fn table_json(table: &bea::table::Table) -> serde_json::Value {
+    let rows: Vec<serde_json::Value> = table
+        .rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|cell| match cell {
+                    bea::table::Cell::Int(v) => serde_json::Value::from(*v),
+                    bea::table::Cell::Text(s) => serde_json::Value::from(s.as_str()),
+                })
+                .collect()
+        })
+        .collect();
+    serde_json::json!({ "columns": table.columns, "rows": rows })
+}
+
+fn open_cpk(source: &Source, name: &str) -> Result<Option<cpk::Archive<BufReader<File>>>> {
+    let Some(path) = source.resolve(name) else {
+        return Ok(None);
+    };
+    let file = File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(Some(cpk::Archive::open(BufReader::new(file))?))
+}
+
+type Fail<'a> = dyn Fn(&str, BoxError) + Sync + 'a;
+
+fn import_scripts(
+    source: &Source,
+    out: &Path,
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) -> Result<()> {
+    let mut archive = open_cpk(source, "script.cpk")?.ok_or("script.cpk is not in the dump")?;
+    let entries = archive.entries.clone();
+    for entry in &entries {
+        let path = format!("script.cpk/{}", entry.path());
+        let result = (|| -> Result<(String, String)> {
+            let data = archive.read(entry)?;
+            let script = stcm2l::Script::parse(&data)?;
+            let name = stem(&entry.name).to_string();
+            let program = ir::build(&name, &script)?;
+            let file = format!("scripts/{name}.json");
+            write(out, &file, &serde_json::to_vec(&program)?)?;
+            Ok((name, file))
+        })();
+        match result {
+            Ok((name, file)) => {
+                manifest.lock().unwrap().scripts.insert(name, file);
+            }
+            Err(e) => fail(&path, e),
+        }
+    }
+    Ok(())
+}
+
+/// Reads the first file of an archive in `Archive/`.
+fn read_archive_first(source: &Source, archive: &str) -> Result<Vec<u8>> {
+    let bytes = source.read(&format!("Archive/{archive}"))?;
+    let parsed = bea::Archive::parse(&bytes)?;
+    let entry = parsed.entries.first().ok_or("the archive is empty")?;
+    Ok(parsed.read(entry)?)
+}
+
+fn import_tables(
+    source: &Source,
+    out: &Path,
+    archives: &[String],
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) {
+    for archive in archives {
+        let Some(name) = table_name(archive) else {
+            continue;
+        };
+        let result = (|| -> Result<String> {
+            let table = bea::table::Table::parse(&read_archive_first(source, archive)?)?;
+            let file = format!("tables/{name}.json");
+            write(out, &file, &serde_json::to_vec(&table_json(&table))?)?;
+            Ok(file)
+        })();
+        match result {
+            Ok(file) => {
+                manifest
+                    .lock()
+                    .unwrap()
+                    .tables
+                    .insert(name.to_string(), file);
+            }
+            Err(e) => fail(&format!("Archive/{archive}"), e),
+        }
+    }
+}
+
+fn import_images(
+    source: &Source,
+    out: &Path,
+    archives: &[String],
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) {
+    archives.par_iter().for_each(|archive| {
+        let Some((group, name)) = texture_name(archive) else {
+            return;
+        };
+        let result = (|| -> Result<String> {
+            let data = read_archive_first(source, archive)?;
+            let png = match image::decode_raw(&data) {
+                Some((width, height, rgba)) => image::encode_png(width, height, rgba)?,
+                None => {
+                    let textures = bntx::parse(&data)?;
+                    let texture = textures.first().ok_or("the file holds no texture")?;
+                    image::encode_png(texture.width, texture.height, &texture.to_rgba8()?)?
+                }
+            };
+            let file = format!("images/{group}/{name}.png");
+            write(out, &file, &png)?;
+            Ok(file)
+        })();
+        match result {
+            Ok(file) => {
+                manifest
+                    .lock()
+                    .unwrap()
+                    .images
+                    .entry(group)
+                    .or_default()
+                    .insert(name, file);
+            }
+            Err(e) => fail(&format!("Archive/{archive}"), e),
+        }
+    });
+}
+
+fn import_sprites(source: &Source, out: &Path, manifest: &Mutex<Manifest>, fail: &Fail) {
+    let rows = match read_archive_first(source, &format!("static~chara.bin{ARCHIVE_SUFFIX}"))
+        .and_then(|data| Ok(bea::table::Table::parse(&data)?))
+    {
+        Ok(table) => table.rows,
+        Err(e) => {
+            fail("Archive/static~chara.bin", e);
+            return;
+        }
+    };
+    rows.par_iter().for_each(|row| {
+        let result = (|| -> Result<SpriteEntry> {
+            let layout = sprite::Sprite::from_row(row)?;
+            let archive = format!("{}{ARCHIVE_SUFFIX}", layout.name);
+            let textures = bntx::parse(&read_archive_first(source, &archive)?)?;
+            let texture = textures.first().ok_or("the sprite has no texture")?;
+            if (texture.width, texture.height) != (layout.sheet.x, layout.sheet.y) {
+                return Err(format!(
+                    "the sheet is {}x{}, chara.bin says {}x{}",
+                    texture.width, texture.height, layout.sheet.x, layout.sheet.y
+                )
+                .into());
+            }
+            let file = format!("sprites/{}.png", layout.name);
+            let png = image::encode_png(texture.width, texture.height, &texture.to_rgba8()?)?;
+            write(out, &file, &png)?;
+            Ok(SpriteEntry { file, layout })
+        })();
+        let name = row
+            .first()
+            .and_then(|c| c.as_text())
+            .unwrap_or("")
+            .to_string();
+        match result {
+            Ok(entry) => {
+                manifest.lock().unwrap().sprites.insert(name, entry);
+            }
+            Err(e) => fail(&format!("sprite {name}"), e),
+        }
+    });
+}
+
+fn import_ui(
+    source: &Source,
+    out: &Path,
+    archives: &[String],
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) {
+    archives.par_iter().for_each(|archive| {
+        let path = format!("Archive/{archive}");
+        let Ok(bytes) = source.read(&path) else {
+            return;
+        };
+        let Ok(parsed) = bea::Archive::parse(&bytes) else {
+            return;
+        };
+        for entry in parsed.entries.iter().filter(|e| e.name.ends_with(".lyt")) {
+            let layout = stem(&entry.name).to_string();
+            let result = (|| -> Result<BTreeMap<String, String>> {
+                let data = parsed.read(entry)?;
+                let mut files = BTreeMap::new();
+                for f in sarc::parse(&data)? {
+                    if !f.data.starts_with(b"BNTX") {
+                        continue;
+                    }
+                    for t in bntx::parse(f.data)? {
+                        let file = format!("ui/{layout}/{}.png", t.name);
+                        write(
+                            out,
+                            &file,
+                            &image::encode_png(t.width, t.height, &t.to_rgba8()?)?,
+                        )?;
+                        files.insert(t.name.clone(), file);
+                    }
+                }
+                Ok(files)
+            })();
+            match result {
+                Ok(files) => {
+                    manifest
+                        .lock()
+                        .unwrap()
+                        .ui
+                        .entry(layout)
+                        .or_default()
+                        .extend(files);
+                }
+                Err(e) => fail(&format!("{path}/{}", entry.name), e),
+            }
+        }
+    });
+}
+
+fn import_audio(
+    source: &Source,
+    out: &Path,
+    archive_name: &str,
+    group: &str,
+    quality: f32,
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) -> Result<()> {
+    let Some(mut archive) = open_cpk(source, archive_name)? else {
+        fail(archive_name, "the archive is not in the dump".into());
+        return Ok(());
+    };
+    let entries: Vec<cpk::Entry> = archive
+        .entries
+        .iter()
+        .filter(|e| e.name.ends_with(".hca"))
+        .cloned()
+        .collect();
+    for batch in entries.chunks(AUDIO_BATCH) {
+        let mut data = Vec::with_capacity(batch.len());
+        for entry in batch {
+            data.push(archive.read(entry));
+        }
+        batch.par_iter().zip(data).for_each(|(entry, bytes)| {
+            let name = stem(&entry.name).to_string();
+            let result = (|| -> Result<AudioEntry> {
+                let track = audio::hca_to_ogg(&bytes?, quality)?;
+                let file = format!("audio/{group}/{name}.ogg");
+                write(out, &file, &track.ogg)?;
+                Ok(AudioEntry {
+                    file,
+                    sample_rate: track.sample_rate,
+                    channels: track.channels,
+                    frames: track.frames,
+                    loop_start: track.looping.map(|l| l.start),
+                })
+            })();
+            match result {
+                Ok(entry) => {
+                    manifest
+                        .lock()
+                        .unwrap()
+                        .audio
+                        .entry(group.to_string())
+                        .or_default()
+                        .insert(name, entry);
+                }
+                Err(e) => fail(&format!("{archive_name}/{}", entry.path()), e),
+            }
+        });
+    }
+    Ok(())
+}
+
+fn import_movies(
+    source: &Source,
+    out: &Path,
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) -> Result<()> {
+    for name in source.list("movie")? {
+        if !name.ends_with(".mp4") {
+            continue;
+        }
+        let file = format!("movies/{name}");
+        let result = source
+            .read(&format!("movie/{name}"))
+            .and_then(|data| write(out, &file, &data));
+        match result {
+            Ok(()) => {
+                manifest
+                    .lock()
+                    .unwrap()
+                    .movies
+                    .insert(stem(&name).to_string(), file);
+            }
+            Err(e) => fail(&format!("movie/{name}"), e),
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn splits_texture_names() {
+        assert_eq!(
+            texture_name("texture~ev_thum~mb0610.dds.nxonnx32.bea"),
+            Some(("ev_thum".to_string(), "mb0610".to_string()))
+        );
+        assert_eq!(
+            texture_name("texture~a~b~c.dds.nxonnx32.bea"),
+            Some(("a/b".to_string(), "c".to_string()))
+        );
+        assert_eq!(texture_name("01_aya_01_A.nxonnx32.bea"), None);
+        assert_eq!(texture_name("texture~bg~bg01.dds.nxonwin32.bea"), None);
+    }
+
+    #[test]
+    fn finds_table_names() {
+        assert_eq!(table_name("static~chara.bin.nxonnx32.bea"), Some("chara"));
+        assert_eq!(table_name("static~chara.nxonnx32.bea"), None);
+        assert_eq!(table_name("chara.bin.nxonnx32.bea"), None);
+    }
+
+    #[test]
+    fn writes_tables_as_json() {
+        let table = bea::table::Table {
+            columns: "si".to_string(),
+            rows: vec![vec![
+                bea::table::Cell::Text("aya".to_string()),
+                bea::table::Cell::Int(-1),
+            ]],
+        };
+        assert_eq!(
+            table_json(&table).to_string(),
+            r#"{"columns":"si","rows":[["aya",-1]]}"#
+        );
+    }
+
+    #[test]
+    fn takes_a_file_from_the_first_root() {
+        let base = std::env::temp_dir().join(format!("dlge-source-{}", std::process::id()));
+        let (patch, dump) = (base.join("patch"), base.join("dump"));
+        for (root, files) in [(&patch, &["a.txt"][..]), (&dump, &["a.txt", "b.txt"][..])] {
+            std::fs::create_dir_all(root.join("dir")).unwrap();
+            for f in files {
+                std::fs::write(root.join("dir").join(f), root.to_string_lossy().as_bytes())
+                    .unwrap();
+            }
+        }
+        let source = Source {
+            roots: vec![patch.clone(), dump.clone()],
+        };
+        assert_eq!(source.resolve("dir/a.txt"), Some(patch.join("dir/a.txt")));
+        assert_eq!(source.resolve("dir/b.txt"), Some(dump.join("dir/b.txt")));
+        assert_eq!(source.resolve("dir/c.txt"), None);
+        assert_eq!(source.list("dir").unwrap(), vec!["a.txt", "b.txt"]);
+        assert!(source.list("none").unwrap().is_empty());
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+}

@@ -9,8 +9,12 @@ repository.workspace = true
 
 [dependencies]
 bea.workspace = true
+bntx.workspace = true
+cpk.workspace = true
 cridecoder = "0.3.7"
 png = "0.18.1"
+rayon = "1"
+sarc.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 stcm2l = { workspace = true, features = ["serde"] }

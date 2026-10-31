@@ -2,5 +2,6 @@
 
 pub mod audio;
 pub mod image;
+pub mod import;
 pub mod ir;
 pub mod sprite;
