@@ -18,6 +18,8 @@
 //! - 0x30: the number of array layers.
 //! - 0x34: the low 3 bits are the log2 of the block height in GOBs.
 //! - 0x50: the size of the pixel data.
+//! - 0x58: the source of each output channel R, G, B, and A: 0 is zero,
+//!   1 is one, 2 to 5 are the decoded R, G, B, and A.
 //! - 0x60: the offset of the name.
 //! - 0x70: the offset of an array of u64 offsets, one for each mip level.
 
@@ -61,6 +63,10 @@ pub enum Format {
     Bc1,
     Bc2,
     Bc3,
+    /// One channel. The decoder puts it in R.
+    Bc4,
+    /// Two channels. The decoder puts them in R and G.
+    Bc5,
     Bc7,
 }
 
@@ -73,6 +79,8 @@ impl Format {
             0x1a => Format::Bc1,
             0x1b => Format::Bc2,
             0x1c => Format::Bc3,
+            0x1d => Format::Bc4,
+            0x1e => Format::Bc5,
             0x20 => Format::Bc7,
             _ => return None,
         })
@@ -87,8 +95,8 @@ impl Format {
         match self {
             Format::R8 => 1,
             Format::Rgba8 => 4,
-            Format::Bc1 => 8,
-            Format::Bc2 | Format::Bc3 | Format::Bc7 => 16,
+            Format::Bc1 | Format::Bc4 => 8,
+            Format::Bc2 | Format::Bc3 | Format::Bc5 | Format::Bc7 => 16,
         }
     }
 }
@@ -107,6 +115,8 @@ pub struct Texture {
     pub tile_mode: u16,
     /// The block height in GOBs.
     pub block_height: u32,
+    /// The source of each output channel. See the module text.
+    pub channels: [u8; 4],
     /// The pixel data of all mip levels and layers, in the tiled layout.
     pub data: Vec<u8>,
 }
@@ -144,7 +154,9 @@ impl Texture {
             self.layer_count.max(1),
         )
         .map_err(|e| Error::Unsupported(format!("deswizzle: {e:?}")))?;
-        decode(format, self.width, self.height, &linear)
+        let mut rgba = decode(format, self.width, self.height, &linear)?;
+        map_channels(&mut rgba, self.channels)?;
+        Ok(rgba)
     }
 }
 
@@ -184,6 +196,16 @@ pub fn decode(format: Format, width: u32, height: u32, linear: &[u8]) -> Result<
                         Format::Bc1 => bcdec_rs::bc1(block, dst, pitch),
                         Format::Bc2 => bcdec_rs::bc2(block, dst, pitch),
                         Format::Bc3 => bcdec_rs::bc3(block, dst, pitch),
+                        Format::Bc4 => {
+                            let mut t = [0u8; 16];
+                            bcdec_rs::bc4(block, &mut t, 4, false);
+                            put_block(dst, pitch, |i| [t[i], 0, 0, 255]);
+                        }
+                        Format::Bc5 => {
+                            let mut t = [0u8; 32];
+                            bcdec_rs::bc5(block, &mut t, 8, false);
+                            put_block(dst, pitch, |i| [t[2 * i], t[2 * i + 1], 0, 255]);
+                        }
                         _ => bcdec_rs::bc7(block, dst, pitch),
                     }
                 }
@@ -194,6 +216,37 @@ pub fn decode(format: Format, width: u32, height: u32, linear: &[u8]) -> Result<
         }
     }
     Ok(out)
+}
+
+/// Writes the 16 pixels of a 4x4 block. `pixel` gives the RGBA value of
+/// each pixel, row by row.
+fn put_block(dst: &mut [u8], pitch: usize, pixel: impl Fn(usize) -> [u8; 4]) {
+    for py in 0..4 {
+        for px in 0..4 {
+            dst[py * pitch + px * 4..][..4].copy_from_slice(&pixel(py * 4 + px));
+        }
+    }
+}
+
+/// Applies the channel sources to RGBA pixels.
+pub fn map_channels(rgba: &mut [u8], channels: [u8; 4]) -> Result<()> {
+    if channels == [2, 3, 4, 5] {
+        return Ok(());
+    }
+    if let Some(bad) = channels.iter().find(|&&c| c > 5) {
+        return Err(Error::Unsupported(format!("channel source {bad}")));
+    }
+    for px in rgba.as_chunks_mut::<4>().0 {
+        let src = *px;
+        for (out, &c) in px.iter_mut().zip(&channels) {
+            *out = match c {
+                0 => 0,
+                1 => 255,
+                c => src[(c - 2) as usize],
+            };
+        }
+    }
+    Ok(())
 }
 
 /// Reads all textures of a BNTX file.
@@ -230,6 +283,7 @@ pub fn parse(data: &[u8]) -> Result<Vec<Texture>> {
             depth: field(0x2c),
             layer_count: field(0x30),
             block_height: 1 << (field(0x34) & 7),
+            channels: b[0x58..0x5c].try_into().unwrap(),
             data: bytes(data, start, size, "pixel data")?.to_vec(),
         });
     }
@@ -310,6 +364,7 @@ mod tests {
         b[0x30..0x34].copy_from_slice(&1u32.to_le_bytes());
         b[0x34..0x38].copy_from_slice(&block_height.trailing_zeros().to_le_bytes());
         b[0x50..0x54].copy_from_slice(&(tiled.len() as u32).to_le_bytes());
+        b[0x58..0x5c].copy_from_slice(&[2, 3, 4, 5]);
         b[0x60..0x68].copy_from_slice(&name.to_le_bytes());
         let mips = brti + 0x78;
         b[0x70..0x78].copy_from_slice(&mips.to_le_bytes());
@@ -349,6 +404,36 @@ mod tests {
         assert_eq!(&rgba[..4], &[255, 0, 0, 255]);
         assert_eq!(&rgba[4 * 4..4 * 4 + 4], &[0, 0, 255, 255]);
         assert_eq!(&rgba[(3 * 8 + 7) * 4..][..4], &[0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn decodes_bc4_into_red() {
+        // Both end points are 200, so each pixel is 200.
+        let block = [200, 200, 0, 0, 0, 0, 0, 0];
+        let file = build(0x1d01, 4, 4, &block);
+        let t = parse(&file).unwrap().remove(0);
+        assert_eq!(t.format(), Some(Format::Bc4));
+        assert_eq!(&t.to_rgba8().unwrap()[..4], &[200, 0, 0, 255]);
+    }
+
+    #[test]
+    fn decodes_bc5_into_red_and_green() {
+        let block = [10, 10, 0, 0, 0, 0, 0, 0, 90, 90, 0, 0, 0, 0, 0, 0];
+        let file = build(0x1e01, 4, 4, &block);
+        let rgba = parse(&file).unwrap()[0].to_rgba8().unwrap();
+        assert_eq!(&rgba[60..64], &[10, 90, 0, 255]);
+    }
+
+    #[test]
+    fn maps_channels() {
+        let mut px = vec![10, 20, 30, 40];
+        // White, with the alpha from the red channel.
+        map_channels(&mut px, [1, 1, 1, 2]).unwrap();
+        assert_eq!(px, [255, 255, 255, 10]);
+        let mut px = vec![10, 20, 30, 40];
+        map_channels(&mut px, [5, 4, 3, 0]).unwrap();
+        assert_eq!(px, [40, 30, 20, 0]);
+        assert!(map_channels(&mut px, [9, 3, 4, 5]).is_err());
     }
 
     #[test]
