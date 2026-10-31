@@ -82,16 +82,59 @@ Most handlers do not act directly. They make a command object and queue it
 for the scene engine with `FUN_71000198d0`. The game has no C++ type
 information, so the classes of the command objects have no names.
 
+## Built-in operators
+
+The run loop does these operators itself. The code is at `0x7100074990`.
+
+| Index | First group: `dest = a op b` | Second group: `dest op= value` |
+|---|---|---|
+| 0 | `0xffffff00` add | `0xffffff0a` add |
+| 1 | `0xffffff01` subtract | `0xffffff0b` subtract |
+| 2 | `0xffffff02` multiply | `0xffffff0c` multiply |
+| 3 | `0xffffff03` divide | `0xffffff0d` divide |
+| 4 | `0xffffff04` remainder | `0xffffff0e` remainder |
+| 5 | `0xffffff05` shift left | `0xffffff0f` shift left |
+| 6 | `0xffffff06` arithmetic shift right | `0xffffff10` arithmetic shift right |
+| 7 | `0xffffff07` and | `0xffffff11` and |
+| 8 | `0xffffff08` xor | `0xffffff12` xor |
+| 9 | `0xffffff09` or | `0xffffff13` or |
+| 10 | | `0xffffff14` assign |
+
+- The first group takes 3 params: `dest`, `a`, and `b`. The second group
+  takes 2 params: `dest` and `value`.
+- A division or a remainder by zero gives zero.
+- The VM selects an int, a float, or a 64-bit form from the types of the
+  operands. The type codes are 0 for int, 1 for float, and 7 for the
+  64-bit form. In the first group, the float form has only add, subtract,
+  multiply, and divide.
+
+## Comparisons
+
+Opcode `0x003` calls a comparison function from a table at
+`0x7100aebc60`. Param 1 is the index. Each function compares param 0 with
+param 2:
+
+| Index | Comparison |
+|---|---|
+| 0 | `>` |
+| 1 | `<` |
+| 2 | `>=` |
+| 3 | `<=` |
+| 4 | `==` |
+| 5 | `!=` |
+
+The scripts use only 4 and 5.
+
 ## Control flow
 
 | Opcode | Count | Grade | Meaning | Handler |
 |---|---|---|---|---|
 | call | 83115 | code | Push a return frame and jump to the target. | run loop |
 | `0x000` | 45395 | code | Return. Pop a frame and go to the action after the call. With no frame, end the script. | `71000714e0` |
-| `0x003` | 88641 | code | Compare param 0 and param 2. If the result is false, jump to param 3. Param 1 is 4 or 5, probably the operator. | `7100073f20` |
+| `0x003` | 88641 | code | Compare param 0 and param 2 with the operator in param 1. If the result is false, jump to param 3. See [Comparisons](#comparisons). | `7100073f20` |
 | `0x006` | 25160 | code | Jump to param 0. | `71000715d0` |
-| `0xffffff14` | 99310 | code | A built-in operator of the second group. Param 0 is a global variable. Param 1 is a value. Probably an assignment. | run loop |
-| `0xffffff02` | 2552 | code | A built-in operator of the first group, with 3 params. | run loop |
+| `0xffffff14` | 99310 | code | Assignment: `param 0 = param 1`. See [Built-in operators](#built-in-operators). | run loop |
+| `0xffffff02` | 2552 | code | Multiplication: `param 0 = param 1 * param 2`. | run loop |
 | `0x44e` | 3731 | data | Param 0 is a label such as `sure2`. Probably a jump to a label. | `710006be30` |
 | `0x44f` | 833 | data | Param 1 is a label such as `sure3`. Probably a jump to a label in another script. | `710006be50` |
 
@@ -149,14 +192,68 @@ information, so the classes of the command objects have no names.
 | `0x427` | 15359 | code | Look up the name in param 0 and write its number into the variable in param 1. The names are ending names such as `aya_ED1_end`. | `710006bc50` |
 | `0x599` | 500 | data | Param 0 is `select`. Param 1 is a choice name. Probably a choice. | `710006ee90` |
 
+## Opcodes that do nothing
+
+The handlers of these opcodes only return 1. On the Switch, they do
+nothing: `0x467`, `0x46a`, `0x492`, `0x493`, `0x494`, `0x495`, `0x61a`, and
+`0x668`.
+
+## Opcodes with no handler
+
+`0x64f` is registered with no handler. `0x69b` and `0x69c` are not
+registered. No other code writes their slots in the handler table.
+
+For an empty slot, the run loop calls the assertion handler and does not
+move the program counter. The same action then runs again. So the game
+must not reach these actions, or code that we have not found fills the
+slots at run time. This is not verified.
+
+`0x69a` comes before `0x69b`. In `mb_aya_Dark_09`, two `0x69a` actions with
+the params `0, 514, 283, 38004` and `1, 388, 202, 38005` come before one
+`0x69b`.
+
 ## Other opcodes
 
-These opcodes appear in the scripts. Their meaning is not known yet:
-`0x456`, `0x457`, `0x466`, `0x467`, `0x46a`, `0x47e`, `0x47f`, `0x480`,
-`0x483`, `0x491`, `0x492`, `0x493`, `0x494`, `0x495`, `0x5a7`, `0x5a8`,
-`0x5a9`, `0x5be`, `0x5cd`, `0x5ce`, `0x61a`, `0x61c`, `0x61d`, `0x64f`,
-`0x668`, `0x69a`, `0x69b`, `0x69c`, `0x6b2`, `0x6c2`, `0x6c3`, `0x6fe`, and
-`0x700`.
+The handlers of these opcodes pass their params to an engine function.
+The meaning is not known yet.
 
-Many of them appear exactly 706 times, one time in each script. They are
-probably part of the start or the end of each script.
+| Opcode | Count | Params that the handler reads | Engine function |
+|---|---|---|---|
+| `0x456` | 2685 | int, int | `FUN_710000a9f0(a, 0, b)` |
+| `0x457` | 1043 | none | `FUN_710000aa90(1000, 0)` |
+| `0x466` | 47 | int, int, int | `FUN_710000abb0` |
+| `0x47e` | 706 | 3 strings, 4 ints | `FUN_7100009a60` |
+| `0x47f` | 706 | 3 strings | `FUN_7100009b20` |
+| `0x480` | 1412 | value, 4 ints | `FUN_7100009740` |
+| `0x483` | 706 | value, 3 ints | `FUN_71000098e0` |
+| `0x491` | 706 | 4 ints | `FUN_71000096a0` |
+| `0x5a7` | 393 | none | `FUN_7100008f70(1)` |
+| `0x5a8` | 392 | none | `FUN_7100008f70(0)` |
+| `0x5a9` | 24 | none | `FUN_7100009000` |
+| `0x5be` | 2 | none | `FUN_710000b0e0` |
+| `0x5cd` | 978 | none | `FUN_710000a7a0` |
+| `0x5ce` | 978 | none | `FUN_710000a810` |
+| `0x61c` | 706 | 3 strings | `FUN_7100009d70` |
+| `0x61d` | 706 | 3 strings | `FUN_7100009e20` |
+| `0x69a` | 215 | 4 ints | `FUN_710000a620` |
+| `0x6b2` | 192 | none | `FUN_710000a490` |
+| `0x6c2` | 15 | int | `FUN_710000a530` |
+| `0x6c3` | 15 | none | `FUN_710000a5b0` |
+| `0x6fe` | 4 | none | `FUN_710000b1c0` |
+| `0x700` | 1361 | none | `FUN_7100008c10` |
+
+`0x5a7` and `0x5a8` call the same function with 1 and 0. They are a pair
+that turns one thing on and off.
+
+## The typed decoder
+
+`stcm2l::decode::decode` turns each action into an `Instruction`. The
+instructions with a verified meaning are calls, returns, jumps, the
+comparison, the built-in operators, text lines, the message, voices, and
+sound effects. The opcodes that do nothing become `NoOp`. The opcodes with
+no handler become `Unregistered`. All other opcodes become `Engine` with
+their arguments.
+
+In the 706 JP scripts, all 866704 actions decode. 645574 of them get a
+verified meaning, and 221130 become `Engine`. In the 706 EN scripts, all
+871025 actions decode.
