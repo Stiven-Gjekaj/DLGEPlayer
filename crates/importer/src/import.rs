@@ -17,6 +17,7 @@
 //! | `ui/<archive>/layouts/<name>.json` | each `.bflyt` layout |
 //! | `ui/<archive>/animations/<name>.json` | each `.bflan` animation |
 //! | `audio/<group>/<name>.ogg` | each HCA file of the audio archives |
+//! | `audio/system/<cue>.ogg` | each cue of `SystemSE.acb`, the menu sounds |
 //! | `movies/<name>.mp4` | each movie, as it is |
 
 use std::collections::BTreeMap;
@@ -28,7 +29,7 @@ use std::sync::Mutex;
 use rayon::prelude::*;
 use serde::Serialize;
 
-use crate::{audio, image, ir, sprite};
+use crate::{adx, audio, image, ir, sprite};
 
 /// The version of the folder format. A change that the player cannot
 /// read makes a new version.
@@ -44,6 +45,9 @@ const AUDIO: [(&str, &str); 4] = [
     ("loopse.cpk", "loopse"),
     ("voice.cpk", "voice"),
 ];
+
+/// The ACB file of the menu sounds, and its output group.
+const SYSTEM_SOUNDS: (&str, &str) = ("SystemSE.acb", "system");
 
 /// The number of audio files that the importer reads before it converts
 /// them in parallel.
@@ -263,6 +267,18 @@ fn run_in_pool(
             &manifest,
             &fail,
         )?;
+        let count = manifest
+            .lock()
+            .unwrap()
+            .audio
+            .get(group)
+            .map_or(0, |g| g.len());
+        progress(&format!("audio {group}: {count}"));
+    }
+
+    let (acb, group) = SYSTEM_SOUNDS;
+    if options.audio_groups.is_empty() || options.audio_groups.iter().any(|g| g == group) {
+        import_acb(source, out, acb, group, options.quality, &manifest, &fail);
         let count = manifest
             .lock()
             .unwrap()
@@ -579,18 +595,9 @@ fn import_audio(
         }
         batch.par_iter().zip(data).for_each(|(entry, bytes)| {
             let name = stem(&entry.name).to_string();
-            let result = (|| -> Result<AudioEntry> {
-                let track = audio::hca_to_ogg(&bytes?, quality)?;
-                let file = format!("audio/{group}/{name}.ogg");
-                write(out, &file, &track.ogg)?;
-                Ok(AudioEntry {
-                    file,
-                    sample_rate: track.sample_rate,
-                    channels: track.channels,
-                    frames: track.frames,
-                    loop_start: track.looping.map(|l| l.start),
-                })
-            })();
+            let result = bytes
+                .map_err(BoxError::from)
+                .and_then(|hca| convert_hca(out, group, &name, &hca, quality));
             match result {
                 Ok(entry) => {
                     manifest
@@ -606,6 +613,81 @@ fn import_audio(
         });
     }
     Ok(())
+}
+
+/// Converts one HCA file to `audio/<group>/<name>.ogg`.
+fn convert_hca(
+    out: &Path,
+    group: &str,
+    name: &str,
+    hca: &[u8],
+    quality: f32,
+) -> Result<AudioEntry> {
+    let track = audio::hca_to_ogg(hca, quality)?;
+    let file = format!("audio/{group}/{name}.ogg");
+    write(out, &file, &track.ogg)?;
+    Ok(AudioEntry {
+        file,
+        sample_rate: track.sample_rate,
+        channels: track.channels,
+        frames: track.frames,
+        loop_start: track.looping.map(|l| l.start),
+    })
+}
+
+/// Converts each HCA or ADX cue of an ACB file with an embedded AWB.
+fn import_acb(
+    source: &Source,
+    out: &Path,
+    acb: &str,
+    group: &str,
+    quality: f32,
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) {
+    let tracks = match source.read(acb).and_then(|data| {
+        Ok(cridecoder::extract_acb_to_memory(
+            std::io::Cursor::new(data),
+            None,
+        )?)
+    }) {
+        Ok(tracks) => tracks,
+        Err(e) => {
+            fail(acb, e);
+            return;
+        }
+    };
+    tracks.par_iter().for_each(|track| {
+        let path = format!("{acb}/{}", track.name);
+        let result = (|| -> Result<AudioEntry> {
+            let converted = match track.extension.trim_start_matches('.') {
+                "hca" => audio::hca_to_ogg(&track.data, quality)?,
+                "adx" => audio::pcm_to_ogg(&adx::decode(&track.data)?, quality)?,
+                other => return Err(format!("unsupported track type {other}").into()),
+            };
+            let file = format!("audio/{group}/{}.ogg", track.name);
+            write(out, &file, &converted.ogg)?;
+            Ok(AudioEntry {
+                file,
+                sample_rate: converted.sample_rate,
+                channels: converted.channels,
+                frames: converted.frames,
+                loop_start: converted.looping.map(|l| l.start),
+            })
+        })();
+        match result {
+            Ok(entry) => {
+                manifest
+                    .lock()
+                    .unwrap()
+                    .audio
+                    .entry(group.to_string())
+                    .or_default()
+                    .insert(track.name.clone(), entry);
+            }
+            Err(e) => fail(&path, e),
+        }
+    });
 }
 
 fn import_movies(
