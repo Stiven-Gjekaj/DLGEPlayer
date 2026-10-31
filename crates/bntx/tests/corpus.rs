@@ -50,3 +50,42 @@ fn every_texture_decodes() {
     );
     eprintln!("{decoded} textures decode; unsupported formats: {unsupported:x?}");
 }
+
+#[test]
+fn every_layout_texture_decodes() {
+    let Some(dir) = std::env::var_os("DLGE_ARCHIVES").map(PathBuf::from) else {
+        eprintln!("DLGE_ARCHIVES is not set. The corpus test does nothing.");
+        return;
+    };
+    let mut decoded = 0;
+    let mut formats: BTreeMap<u32, usize> = BTreeMap::new();
+    for entry in std::fs::read_dir(&dir).expect("read DLGE_ARCHIVES") {
+        let path = entry.unwrap().path();
+        if !path.extension().is_some_and(|e| e == "bea") {
+            continue;
+        }
+        let bytes = std::fs::read(&path).unwrap();
+        let archive = bea::Archive::parse(&bytes).unwrap();
+        for e in &archive.entries {
+            let data = archive.read(e).unwrap();
+            if !data.starts_with(b"SARC") {
+                continue;
+            }
+            for f in sarc::parse(&data).unwrap() {
+                if !f.data.starts_with(b"BNTX") {
+                    continue;
+                }
+                for t in bntx::parse(f.data).unwrap() {
+                    let rgba = t
+                        .to_rgba8()
+                        .unwrap_or_else(|err| panic!("{} {}: {err}", path.display(), t.name));
+                    assert_eq!(rgba.len(), (t.width * t.height * 4) as usize, "{}", t.name);
+                    *formats.entry(t.format_code).or_default() += 1;
+                    decoded += 1;
+                }
+            }
+        }
+    }
+    assert!(decoded > 0, "no layout textures in {}", dir.display());
+    eprintln!("{decoded} layout textures decode: {formats:x?}");
+}
