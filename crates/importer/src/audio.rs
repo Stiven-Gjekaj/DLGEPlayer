@@ -1,4 +1,4 @@
-//! Converts CRI HCA audio to Ogg Vorbis.
+//! Converts CRI HCA audio and decoded PCM audio to Ogg Vorbis.
 //!
 //! Godot 4 loads Ogg Vorbis files at runtime. It does not load Opus. An
 //! Ogg Vorbis stream loops from a start point to the end of the stream, so
@@ -73,6 +73,44 @@ pub struct Track {
     pub frames: u64,
     /// The loop of the track. The output ends at the loop end.
     pub looping: Option<Loop>,
+}
+
+/// Converts 16-bit PCM audio, for example from the ADX decoder.
+pub fn pcm_to_ogg(pcm: &crate::adx::Pcm, quality: f32) -> Result<Track, Error> {
+    let channels = u8::try_from(pcm.channels)
+        .ok()
+        .and_then(NonZeroU8::new)
+        .ok_or(Error::BadHeader("channel count"))?;
+    let rate = NonZeroU32::new(pcm.sample_rate).ok_or(Error::BadHeader("sample rate"))?;
+    let count = channels.get() as usize;
+    let mut ogg = Vec::new();
+    let mut encoder =
+        VorbisEncoderBuilder::new_with_serial(rate, channels, &mut ogg, STREAM_SERIAL)
+            .bitrate_management_strategy(VorbisBitrateManagementStrategy::QualityVbr {
+                target_quality: quality,
+            })
+            .build()?;
+    for block in pcm.samples.chunks(BLOCK * count) {
+        let planar: Vec<Vec<f32>> = (0..count)
+            .map(|c| {
+                block
+                    .iter()
+                    .skip(c)
+                    .step_by(count)
+                    .map(|&s| s as f32 / 32768.0)
+                    .collect()
+            })
+            .collect();
+        encoder.encode_audio_block(&planar)?;
+    }
+    encoder.finish()?;
+    Ok(Track {
+        ogg,
+        sample_rate: pcm.sample_rate,
+        channels: pcm.channels,
+        frames: (pcm.samples.len() / count) as u64,
+        looping: None,
+    })
 }
 
 /// Converts an HCA file. `quality` is the Vorbis quality from -0.2 to 1.0.
@@ -210,6 +248,18 @@ mod tests {
             hca_to_ogg(&input, 0.3).unwrap().ogg,
             hca_to_ogg(&input, 0.3).unwrap().ogg
         );
+    }
+
+    #[test]
+    fn converts_pcm() {
+        let pcm = crate::adx::Pcm {
+            sample_rate: 22_050,
+            channels: 2,
+            samples: (0..2 * 3000).map(|i| (i % 200) as i16 * 100).collect(),
+        };
+        let track = pcm_to_ogg(&pcm, 0.3).unwrap();
+        assert_eq!(track.frames, 3000);
+        assert_eq!(decoded_frames(&track.ogg), (3000, 2, 22_050));
     }
 
     #[test]
