@@ -14,4 +14,5 @@ clap = { version = "4.6.7", features = ["derive"] }
 cpk.workspace = true
 importer.workspace = true
 png = "0.18.1"
+sarc.workspace = true
 stcm2l.workspace = true

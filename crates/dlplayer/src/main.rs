@@ -39,6 +39,8 @@ enum Command {
     Texture { file: PathBuf, out: PathBuf },
     /// Print a BIN_ table from a .bea file as tab-separated text.
     Table { file: PathBuf },
+    /// Write the files of each layout in a .bea file, and its textures as PNG.
+    Layout { file: PathBuf, out: PathBuf },
     /// Write a character sprite with an expression as a PNG image.
     Sprite {
         /// The Archive directory of the RomFS dump.
@@ -84,6 +86,7 @@ fn main() -> ExitCode {
         },
         Command::Texture { file, out } => texture(&file, &out),
         Command::Table { file } => table(&file),
+        Command::Layout { file, out } => layout(&file, &out),
         Command::Sprite {
             archives,
             name,
@@ -291,6 +294,41 @@ fn sprite(archives: &Path, name: &str, expression: Option<&str>, out: Option<&Pa
     let out = out.ok_or("give an output file")?;
     write_png(out, sprite.body.x, sprite.body.y, &rgba)?;
     eprintln!("{name} {expression}: {}x{}", sprite.body.x, sprite.body.y);
+    Ok(())
+}
+
+fn layout(path: &Path, out: &Path) -> Result<()> {
+    let bytes = read_file(path)?;
+    let archive = bea::Archive::parse(&bytes)?;
+    let (mut files, mut images) = (0, 0);
+    for e in &archive.entries {
+        let data = archive.read(e)?;
+        if !data.starts_with(b"SARC") {
+            continue;
+        }
+        let dir = safe_join(out, &e.name)?;
+        for f in sarc::parse(&data)? {
+            let target = safe_join(&dir, &f.name)?;
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&target, f.data)?;
+            files += 1;
+            if f.data.starts_with(b"BNTX") {
+                let images_dir = target.with_extension("png.d");
+                std::fs::create_dir_all(&images_dir)?;
+                for t in bntx::parse(f.data)? {
+                    let png = safe_join(&images_dir, &format!("{}.png", t.name))?;
+                    write_png(&png, t.width, t.height, &t.to_rgba8()?)?;
+                    images += 1;
+                }
+            }
+        }
+    }
+    eprintln!(
+        "wrote {files} files and {images} images to {}",
+        out.display()
+    );
     Ok(())
 }
 

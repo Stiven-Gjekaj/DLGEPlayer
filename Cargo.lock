@@ -169,6 +169,7 @@ dependencies = [
  "cpk",
  "importer",
  "png",
+ "sarc",
  "stcm2l",
 ]
 
