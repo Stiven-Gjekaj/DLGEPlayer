@@ -229,6 +229,11 @@ impl Sprite {
 /// are named `veshuu`.
 const ALIASES: [(&str, &str); 1] = [("shuu", "veshuu")];
 
+/// The other expression names that the scripts use. The scripts spell
+/// ちょ as `tyo` (Kunrei romanization). `chara.bin` spells it `cho`
+/// (Hepburn romanization).
+const EXPRESSION_ALIASES: [(&str, &str); 1] = [("tyo", "cho")];
+
 /// A sprite name of a script, resolved to rows of `chara.bin`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resolved {
@@ -280,21 +285,28 @@ impl Catalog {
             .rows_of(pose)
             .ok_or_else(|| ResolveError::UnknownPose(pose.to_string()))?;
         let (pose, rows) = rows;
-        let has = rows.iter().any(|&r| {
-            self.sprites[r]
-                .expressions
-                .iter()
-                .any(|e| e.name == expression)
-        });
-        if !has {
-            return Err(ResolveError::UnknownExpression {
-                pose,
+        let has = |expression: &str| {
+            rows.iter().any(|&r| {
+                self.sprites[r]
+                    .expressions
+                    .iter()
+                    .any(|e| e.name == expression)
+            })
+        };
+        let alias = EXPRESSION_ALIASES
+            .iter()
+            .find(|(from, _)| *from == expression)
+            .map(|(_, to)| *to);
+        let found = std::iter::once(expression)
+            .chain(alias)
+            .find(|e| has(e))
+            .ok_or_else(|| ResolveError::UnknownExpression {
+                pose: pose.clone(),
                 expression: expression.to_string(),
-            });
-        }
+            })?;
         Ok(Resolved {
             pose,
-            expression: expression.to_string(),
+            expression: found.to_string(),
             rows: rows.to_vec(),
         })
     }
@@ -423,8 +435,8 @@ mod tests {
     #[test]
     fn resolves_script_names() {
         let catalog = Catalog::new(vec![
-            sprite("02_kan_03b_A", &["tujo", "emi"]),
-            sprite("02_kan_03b_B", &["tujo", "emi"]),
+            sprite("02_kan_03b_A", &["tujo", "emi", "cho"]),
+            sprite("02_kan_03b_B", &["tujo", "emi", "cho"]),
             sprite("04_veshuu_03_A", &["maji"]),
             sprite("21_car_02", &["emi"]),
         ]);
@@ -433,11 +445,12 @@ mod tests {
         assert_eq!(r.rows, [0, 1]);
         assert_eq!(catalog.resolve("shuu_03_maji").unwrap().pose, "veshuu_03");
         assert_eq!(catalog.resolve("car_02_emi").unwrap().rows, [3]);
+        assert_eq!(catalog.resolve("kan_03b_tyo").unwrap().expression, "cho");
         assert_eq!(
-            catalog.resolve("kan_03b_tyo"),
+            catalog.resolve("kan_03b_maji"),
             Err(ResolveError::UnknownExpression {
                 pose: "kan_03b".into(),
-                expression: "tyo".into()
+                expression: "maji".into()
             })
         );
         assert_eq!(

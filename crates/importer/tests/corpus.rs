@@ -86,14 +86,18 @@ fn script_sprite_names_resolve() {
         }
     }
     assert!(calls > 0, "no sprite calls in {}", scripts.display());
-    // Every pose must resolve. An expression can be missing from a pose.
+    // Every pose and every expression must resolve.
     assert!(
         unknown.is_empty(),
         "{} names failed:\n{}",
         unknown.len(),
         unknown.join("\n")
     );
-    eprintln!("{resolved} of {calls} calls resolve; missing expressions: {missing_expressions:?}");
+    assert!(
+        missing_expressions.is_empty(),
+        "missing expressions: {missing_expressions:?}"
+    );
+    eprintln!("{resolved} of {calls} calls resolve");
 }
 
 /// Builds the IR of each script in `DLGE_SCRIPTS`.
