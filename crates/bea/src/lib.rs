@@ -26,6 +26,8 @@
 use std::fmt;
 use std::io::Read;
 
+pub mod table;
+
 pub const MAGIC: &[u8; 4] = b"SCNE";
 const ASSET_MAGIC: &[u8; 4] = b"ASST";
 const COMPRESSION_NONE: u16 = 0;

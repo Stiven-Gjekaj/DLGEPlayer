@@ -68,6 +68,7 @@ checksum = "8d521509f38a9ab0fce76656a0416161ee5d42c1eab6672b958391e2ac7a0e31"
 name = "bea"
 version = "0.1.0"
 dependencies = [
+ "encoding_rs",
  "ruzstd",
 ]
 
