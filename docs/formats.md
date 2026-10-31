@@ -90,8 +90,21 @@ the pose with an expression such as `ayaU_03_cho`. A row name is the pose
 with a number before it and a size letter after it, for example
 `01_ayaU_03_A`. In the JP scripts, 45588 calls have two string arguments.
 For 39686 of them, the names match a row and an expression of that row.
-The other calls use names that do not match yet, for example `her_03`,
-`car_02`, `shuu_03`, and `kan_03d_tujo`.
+These rules resolve the names:
+
+- The second name decides the sprite. It is a pose and an expression. In
+  `"kan_03", "kan_03b_tujo"`, the pose is `kan_03b`, a costume variant of
+  `kan_03`, and the expression is `tujo`.
+- The scripts call the Shu of Haunted Dark Bridal `shuu`. His rows are
+  named `veshuu`.
+- Some rows have no size letter, for example `21_car_01` and the small
+  sprites `11_miniaya_01`.
+
+`importer::sprite::Catalog` uses these rules. In the JP and the EN scripts,
+each pose resolves. 44629 of the 45588 calls also find their expression.
+The other 959 calls use the expression `tyo`, which no row has. The game
+code does not have the text `tyo`. What the game shows for it is not
+known.
 
 ## BIN_ tables
 
@@ -126,6 +139,28 @@ number of integer slots is a multiple of 2. The strings are Shift-JIS.
 
 The English patch replaces `bg.bin`, `select.bin`, and `speaker.bin`. The
 patched `speaker.bin` has the English names.
+
+## Layouts
+
+A `.lyt` file is a SARC archive. The `sarc` crate reads it. The 84 layouts
+hold 521 `.bflyt` layouts, 348 `.bflan` animations, and 83 BNTX files with
+the textures of the user interface. These are the NintendoWare layout
+formats. The `.bflyt` and `.bflan` files are not decoded yet.
+
+The 83 BNTX files hold 1163 textures. All of them decode:
+
+| Format | Count |
+|---|---|
+| `0x1c06` BC3 sRGB | 1110 |
+| `0x1d01` BC4 | 20 |
+| `0x1e01` BC5 | 17 |
+| `0x2006` BC7 sRGB | 10 |
+| `0x1a06` BC1 sRGB | 6 |
+
+The BC4 and BC5 textures use the channel sources of the `BRTI` block. The
+suffix of the texture name shows them: `^r` is `RRR1`, `^s` is `111R`, and
+`^t` is `RRRG`. For example, `^t` gives a grey image with the alpha from
+the second channel.
 
 ## Audio
 
@@ -254,8 +289,9 @@ such as `’` and `ー`. It has name tokens such as `#Name[2]`.
 
 ## Known open items
 
-- The textures inside the `.lyt` layouts, and the formats `0x1505`, `0x201`,
-  and `0x1905`.
+- The `.bflyt` layouts and the `.bflan` animations.
+- The formats `0x1505`, `0x201`, and `0x1905` in `System.bea`.
+- The expression `tyo` of 959 sprite calls.
 
 - The text has some rare characters where the context needs punctuation.
   For example, `ゞ` appears after `なに`. The font of the game possibly
