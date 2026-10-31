@@ -32,8 +32,8 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 
 ## Risks
 
-1. The character sprites are sheets with patches for the eyes and the mouth. `static/chara.bin` gives the positions, and the `importer` crate builds a sprite with an expression. The scripts must still map their sprite and expression names to these rows.
-2. The menus of the game are in Bezel layouts. The player can need new menus that we make by hand.
+1. The character sprites are sheets with patches for the eyes and the mouth. `static/chara.bin` gives the positions, and the `importer` crate builds a sprite with an expression. The `Catalog` resolves the sprite names of the scripts. Only the expression `tyo` is not found.
+2. The menus of the game are 41 Lua scripts and 521 NintendoWare `.bflyt` layouts. The textures of the layouts decode. The layouts and the Lua scripts are not decoded yet. The player can need new menus that we make by hand.
 3. The `.hca` audio is not encrypted. The music and the sound effects were all checked. The voices were checked in a sample.
 4. The format of the English patch is not known until we have the files.
 5. The voice archive is 2.6 GB. Mobile devices need a smaller format, for example Opus at a low bit rate.
