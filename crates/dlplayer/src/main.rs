@@ -41,6 +41,14 @@ enum Command {
     Table { file: PathBuf },
     /// Write the files of each layout in a .bea file, and its textures as PNG.
     Layout { file: PathBuf, out: PathBuf },
+    /// Convert an HCA audio file to Ogg Vorbis.
+    Audio {
+        file: PathBuf,
+        out: PathBuf,
+        /// The Vorbis quality, from -0.2 to 1.0.
+        #[arg(long, default_value_t = 0.4)]
+        quality: f32,
+    },
     /// Write a character sprite with an expression as a PNG image.
     Sprite {
         /// The Archive directory of the RomFS dump.
@@ -87,6 +95,7 @@ fn main() -> ExitCode {
         Command::Texture { file, out } => texture(&file, &out),
         Command::Table { file } => table(&file),
         Command::Layout { file, out } => layout(&file, &out),
+        Command::Audio { file, out, quality } => audio(&file, &out, quality),
         Command::Sprite {
             archives,
             name,
@@ -294,6 +303,23 @@ fn sprite(archives: &Path, name: &str, expression: Option<&str>, out: Option<&Pa
     let out = out.ok_or("give an output file")?;
     write_png(out, sprite.body.x, sprite.body.y, &rgba)?;
     eprintln!("{name} {expression}: {}x{}", sprite.body.x, sprite.body.y);
+    Ok(())
+}
+
+fn audio(path: &Path, out: &Path, quality: f32) -> Result<()> {
+    let track = importer::audio::hca_to_ogg(&read_file(path)?, quality)?;
+    std::fs::write(out, &track.ogg)?;
+    let looping = match track.looping {
+        Some(l) => format!(", loop {}..{}", l.start, l.end),
+        None => String::new(),
+    };
+    eprintln!(
+        "{} Hz, {} channels, {} frames{looping}, {} bytes",
+        track.sample_rate,
+        track.channels,
+        track.frames,
+        track.ogg.len()
+    );
     Ok(())
 }
 
