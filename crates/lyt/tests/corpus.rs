@@ -103,3 +103,52 @@ fn every_layout_reads() {
     );
     eprintln!("{count} layouts, {panes} panes, {texts} text panes");
 }
+
+#[test]
+fn every_animation_reads() {
+    let Some(dir) = std::env::var_os("DLGE_ARCHIVES").map(PathBuf::from) else {
+        eprintln!("DLGE_ARCHIVES is not set. The corpus test does nothing.");
+        return;
+    };
+    let (mut count, mut keys) = (0, 0);
+    let mut errors = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let bytes = std::fs::read(entry.unwrap().path()).unwrap();
+        let Ok(archive) = bea::Archive::parse(&bytes) else {
+            continue;
+        };
+        for e in archive.entries.iter().filter(|e| e.name.ends_with(".lyt")) {
+            let data = archive.read(e).unwrap();
+            for f in sarc::parse(&data).unwrap() {
+                if !f.name.ends_with(".bflan") {
+                    continue;
+                }
+                match lyt::anim::parse(f.data) {
+                    Ok(a) => {
+                        count += 1;
+                        for t in &a.targets {
+                            for tag in &t.tags {
+                                for c in &tag.curves {
+                                    keys += c.keys.len();
+                                    // The keys of a curve come in the order of the frames.
+                                    if c.keys.windows(2).any(|w| w[0].frame > w[1].frame) {
+                                        errors.push(format!("{}/{}: {:?}", e.name, f.name, c.keys));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => errors.push(format!("{}/{}: {err}", e.name, f.name)),
+                }
+            }
+        }
+    }
+    assert!(count > 0, "no animations in {}", dir.display());
+    assert!(
+        errors.is_empty(),
+        "{} errors:\n{}",
+        errors.len(),
+        errors.join("\n")
+    );
+    eprintln!("{count} animations, {keys} keys");
+}

@@ -1,4 +1,5 @@
-//! Reads NintendoWare `.bflyt` layouts, version 8.
+//! Reads NintendoWare `.bflyt` layouts, version 8. The `anim` module reads
+//! the `.bflan` animations.
 //!
 //! All numbers are little-endian. The file starts with `FLYT`, the byte
 //! order mark `ff fe`, the header size, the version, the file size, and the
@@ -22,6 +23,8 @@
 //! the rotation (3 f32), the scale (2 f32), and the size (2 f32).
 
 use std::fmt;
+
+pub mod anim;
 
 use serde::Serialize;
 
