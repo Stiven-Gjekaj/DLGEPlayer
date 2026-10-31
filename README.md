@@ -123,6 +123,8 @@ The tool is `target/release/dlplayer`.
 | `dlplayer disasm scripts/mb_aya_Dark_01.dat` | Prints the listing of one script |
 | `dlplayer disasm --strings scripts/mb_aya_Dark_01.dat` | Prints only the text of one script |
 | `dlplayer dump-scripts romfs/script.cpk scripts_text` | Writes a `.asm` listing and a `.txt` file for each script |
+| `dlplayer bea list romfs/Archive/title.nxonnx32.bea` | Prints the files in a Bezel Engine archive |
+| `dlplayer texture "romfs/Archive/texture~bg~bg01b.dds.nxonnx32.bea" bg01b.png` | Writes a texture as a PNG image |
 
 ## Crates
 
@@ -130,6 +132,8 @@ The tool is `target/release/dlplayer`.
 | ----- | ------- |
 | `cpk` | Reads CRI CPK archives and CRILAYLA data |
 | `stcm2l` | Reads and writes STCM2L scripts, and writes listings |
+| `bea` | Reads Bezel Engine archives |
+| `bntx` | Decodes BNTX textures to RGBA pixels |
 | `importer` | Converts a dump into a normalized folder. Empty. |
 | `vm` | Runs the script bytecode. Empty. |
 | `player` | The Godot 4 extension. Empty. |
