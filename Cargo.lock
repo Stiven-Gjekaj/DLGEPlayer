@@ -282,6 +282,8 @@ version = "0.1.0"
 dependencies = [
  "bea",
  "cridecoder",
+ "serde",
+ "serde_json",
  "stcm2l",
  "vorbis_rs",
 ]

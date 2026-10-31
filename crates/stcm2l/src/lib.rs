@@ -7,4 +7,4 @@ pub mod operand;
 mod script;
 
 pub use error::{Error, Result};
-pub use script::{Action, Export, Param, Script};
+pub use script::{Action, Export, MAGIC, Param, Script};

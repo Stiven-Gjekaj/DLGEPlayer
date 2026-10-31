@@ -95,3 +95,39 @@ fn script_sprite_names_resolve() {
     );
     eprintln!("{resolved} of {calls} calls resolve; missing expressions: {missing_expressions:?}");
 }
+
+/// Builds the IR of each script in `DLGE_SCRIPTS`.
+#[test]
+fn every_script_builds_ir() {
+    let Some(dir) = std::env::var_os("DLGE_SCRIPTS").map(PathBuf::from) else {
+        eprintln!("DLGE_SCRIPTS is not set. The test does nothing.");
+        return;
+    };
+    let mut count = 0;
+    let mut instructions = 0;
+    let mut failures = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "dat") {
+            continue;
+        }
+        let script = stcm2l::Script::parse(&std::fs::read(&path).unwrap()).unwrap();
+        let name = path.file_stem().unwrap().to_string_lossy();
+        match importer::ir::build(&name, &script) {
+            Ok(ir) => {
+                serde_json::to_string(&ir).unwrap();
+                instructions += ir.code.len();
+            }
+            Err(e) => failures.push(format!("{name}: {e}")),
+        }
+        count += 1;
+    }
+    assert!(count > 0, "no .dat files in {}", dir.display());
+    assert!(
+        failures.is_empty(),
+        "{} of {count} failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+    eprintln!("{count} scripts, {instructions} instructions");
+}
