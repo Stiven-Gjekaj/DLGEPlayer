@@ -81,9 +81,11 @@ const COMPARES: [Compare; 6] = [
 /// One typed instruction.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
-    /// Push a return frame and jump to the target.
+    /// Push a return frame and jump to the target. The arguments are the
+    /// params of the call, for example the two names of a sprite.
     Call {
         target: u32,
+        args: Vec<Value>,
     },
     /// Pop a frame. With no frame, end the script.
     Return,
@@ -192,6 +194,11 @@ pub fn decode(script: &Script, action: &Action) -> Result<Instruction, DecodeErr
     if action.is_call() {
         return Ok(Instruction::Call {
             target: action.opcode,
+            args: action
+                .params
+                .iter()
+                .map(|p| value(Operand::of(script, action, p)))
+                .collect(),
         });
     }
     let op = action.opcode;
@@ -442,7 +449,10 @@ mod tests {
         call.call = 1;
         assert_eq!(
             decode(&script, &call),
-            Ok(Instruction::Call { target: 0x1234 })
+            Ok(Instruction::Call {
+                target: 0x1234,
+                args: vec![],
+            })
         );
         assert_eq!(
             decode(&script, &action(&script, 0, &[])),
@@ -453,6 +463,27 @@ mod tests {
         assert_eq!(
             decode(&script, &jump),
             Ok(Instruction::Goto { target: 0x80 })
+        );
+    }
+
+    #[test]
+    fn keeps_the_arguments_of_a_call() {
+        let script = empty_script();
+        let mut call = action(
+            &script,
+            0x80,
+            &[Some(block(b"ayaU_03\0")), Some(block(b"ayaU_03_cho\0"))],
+        );
+        call.call = 1;
+        assert_eq!(
+            decode(&script, &call),
+            Ok(Instruction::Call {
+                target: 0x80,
+                args: vec![
+                    Value::Text("ayaU_03".into()),
+                    Value::Text("ayaU_03_cho".into())
+                ],
+            })
         );
     }
 
