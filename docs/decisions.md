@@ -50,3 +50,33 @@ Each entry gives the reason.
 - **The format notes of hkki and ideaf_script_format have no licence.** The
   parser uses no code from them. It comes from the notes and from the real
   files.
+
+## The import folder
+
+- **The audio is Ogg Vorbis, not Opus.** Reason: Godot 4 loads Ogg Vorbis
+  files at runtime with `AudioStreamOggVorbis.load_from_file`. It does not
+  load Opus. The first plan said Opus. The voices are 2.2 GB at quality
+  0.4. `--quality` makes them smaller.
+- **A looped track ends at its loop end.** Reason: an Ogg Vorbis stream in
+  Godot loops from a loop offset to the end of the stream. `manifest.json`
+  gives the loop start.
+- **The `cridecoder` crate decodes HCA.** It has the MIT licence, which
+  agrees with the GPL. Reason: it decodes all 38546 HCA files of the dump
+  with no error, so a second decoder gives no gain.
+- **The `vorbis_rs` crate encodes Ogg Vorbis.** It builds libvorbis from
+  source with the C compiler of the target, also for Android and iOS. The
+  encoder uses a fixed stream serial, so the same dump gives the same
+  files.
+- **The ADX decoder is our own code.** Reason: `cridecoder` does not decode
+  ADX, and the 5 menu sounds need only the standard ADPCM. The output
+  agrees with FFmpeg.
+- **The images are PNG.** Reason: Godot loads PNG at runtime, and PNG is
+  lossless. The images are 2.8 GB with the sprites. A later phase can add
+  WebP for mobile devices.
+- **A sprite is one sheet and its layout.** The importer does not compose
+  each expression. Reason: 878 sheets are smaller than 9969 composed
+  frames. The player draws the body and two patches from the sheet.
+- **The movies stay MP4.** Reason: the importer must not need FFmpeg. Godot
+  plays only Ogg Theora video, so phase 6 must decide how to play them.
+- **The importer uses all CPU cores by default.** `--jobs` limits the
+  threads.
