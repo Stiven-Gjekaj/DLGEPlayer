@@ -29,6 +29,13 @@
   its sheet. All 878 sprites and 9969 frames fit.
 - `dlplayer table` prints a table, and `dlplayer sprite` writes a sprite as
   a PNG image.
+- The typed decoder keeps the arguments of a call.
+- `importer::sprite::Catalog` resolves the sprite names of the scripts.
+- The `sarc` crate reads SARC archives. The `bntx` crate decodes BC4 and
+  BC5 and applies the channel sources. All 1163 layout textures decode.
+- `dlplayer layout` writes the files of the layouts and their textures.
+- The listing and the decoder read voice and sound effect numbers as
+  integers.
 - `dlplayer cpk list` and `dlplayer cpk extract` read archives.
 - `dlplayer disasm` prints the listing or the text of one script.
 - `dlplayer dump-scripts` writes a listing and a text file for each script
