@@ -222,6 +222,105 @@ impl Sprite {
     }
 }
 
+/// The other character names that the scripts use in sprite names.
+/// The scripts call the Shu of Haunted Dark Bridal `shuu`. His sprites
+/// are named `veshuu`.
+const ALIASES: [(&str, &str); 1] = [("shuu", "veshuu")];
+
+/// A sprite name of a script, resolved to rows of `chara.bin`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Resolved {
+    /// The pose, for example `ayaU_03b`.
+    pub pose: String,
+    pub expression: String,
+    /// The indexes of the rows of the pose, one for each size.
+    pub rows: Vec<usize>,
+}
+
+/// Why a sprite name does not resolve.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolveError {
+    /// The name has no `_` before an expression.
+    BadName(String),
+    UnknownPose(String),
+    /// The pose exists, but none of its rows has the expression.
+    UnknownExpression {
+        pose: String,
+        expression: String,
+    },
+}
+
+/// All sprites of `chara.bin`, found by pose.
+#[derive(Debug, Clone)]
+pub struct Catalog {
+    pub sprites: Vec<Sprite>,
+    by_pose: std::collections::HashMap<String, Vec<usize>>,
+}
+
+impl Catalog {
+    pub fn new(sprites: Vec<Sprite>) -> Catalog {
+        let mut by_pose: std::collections::HashMap<String, Vec<usize>> = Default::default();
+        for (i, sprite) in sprites.iter().enumerate() {
+            if let Some((pose, _)) = split_row_name(&sprite.name) {
+                by_pose.entry(pose.to_string()).or_default().push(i);
+            }
+        }
+        Catalog { sprites, by_pose }
+    }
+
+    /// Resolves the second sprite name of a script call, for example
+    /// `kan_03b_tujo`. The name is a pose and an expression.
+    pub fn resolve(&self, name: &str) -> Result<Resolved, ResolveError> {
+        let (pose, expression) = name
+            .rsplit_once('_')
+            .ok_or_else(|| ResolveError::BadName(name.to_string()))?;
+        let rows = self
+            .rows_of(pose)
+            .ok_or_else(|| ResolveError::UnknownPose(pose.to_string()))?;
+        let (pose, rows) = rows;
+        let has = rows.iter().any(|&r| {
+            self.sprites[r]
+                .expressions
+                .iter()
+                .any(|e| e.name == expression)
+        });
+        if !has {
+            return Err(ResolveError::UnknownExpression {
+                pose,
+                expression: expression.to_string(),
+            });
+        }
+        Ok(Resolved {
+            pose,
+            expression: expression.to_string(),
+            rows: rows.to_vec(),
+        })
+    }
+
+    fn rows_of(&self, pose: &str) -> Option<(String, &Vec<usize>)> {
+        if let Some(rows) = self.by_pose.get(pose) {
+            return Some((pose.to_string(), rows));
+        }
+        let (character, rest) = pose.split_once('_')?;
+        let (_, alias) = ALIASES.iter().find(|(from, _)| *from == character)?;
+        let other = format!("{alias}_{rest}");
+        self.by_pose.get(&other).map(|rows| (other, rows))
+    }
+}
+
+/// Splits a row name such as `01_ayaU_03_A` into the pose `ayaU_03` and
+/// the size `A`. Some rows, such as `21_car_01`, have no size.
+pub fn split_row_name(name: &str) -> Option<(&str, Option<char>)> {
+    let (number, rest) = name.split_once('_')?;
+    if number.is_empty() || !number.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    match rest.rsplit_once('_') {
+        Some((pose, size)) if matches!(size, "A" | "B" | "C") => Some((pose, size.chars().next())),
+        _ => Some((rest, None)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,6 +394,58 @@ mod tests {
         assert_eq!(pixel(&img, 1, 1), [0, 255, 0, 255]);
         // A transparent patch keeps the body.
         assert_eq!(pixel(&img, 2, 3), [10, 10, 10, 255]);
+    }
+
+    fn sprite(name: &str, expressions: &[&str]) -> Sprite {
+        let mut s = Sprite::from_row(&row()).unwrap();
+        s.name = name.into();
+        let e = s.expressions[0].clone();
+        s.expressions = expressions
+            .iter()
+            .map(|n| Expression {
+                name: n.to_string(),
+                ..e.clone()
+            })
+            .collect();
+        s
+    }
+
+    #[test]
+    fn splits_row_names() {
+        assert_eq!(split_row_name("01_ayaU_03_A"), Some(("ayaU_03", Some('A'))));
+        assert_eq!(split_row_name("02_kan_03b_C"), Some(("kan_03b", Some('C'))));
+        assert_eq!(split_row_name("21_car_01"), Some(("car_01", None)));
+        assert_eq!(split_row_name("ayaU_03_A"), None);
+    }
+
+    #[test]
+    fn resolves_script_names() {
+        let catalog = Catalog::new(vec![
+            sprite("02_kan_03b_A", &["tujo", "emi"]),
+            sprite("02_kan_03b_B", &["tujo", "emi"]),
+            sprite("04_veshuu_03_A", &["maji"]),
+            sprite("21_car_02", &["emi"]),
+        ]);
+        let r = catalog.resolve("kan_03b_emi").unwrap();
+        assert_eq!((r.pose.as_str(), r.expression.as_str()), ("kan_03b", "emi"));
+        assert_eq!(r.rows, [0, 1]);
+        assert_eq!(catalog.resolve("shuu_03_maji").unwrap().pose, "veshuu_03");
+        assert_eq!(catalog.resolve("car_02_emi").unwrap().rows, [3]);
+        assert_eq!(
+            catalog.resolve("kan_03b_tyo"),
+            Err(ResolveError::UnknownExpression {
+                pose: "kan_03b".into(),
+                expression: "tyo".into()
+            })
+        );
+        assert_eq!(
+            catalog.resolve("rei_09_emi"),
+            Err(ResolveError::UnknownPose("rei_09".into()))
+        );
+        assert!(matches!(
+            catalog.resolve("emi"),
+            Err(ResolveError::BadName(_))
+        ));
     }
 
     #[test]

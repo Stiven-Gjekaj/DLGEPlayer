@@ -9,3 +9,6 @@ repository.workspace = true
 
 [dependencies]
 bea.workspace = true
+
+[dev-dependencies]
+stcm2l.workspace = true

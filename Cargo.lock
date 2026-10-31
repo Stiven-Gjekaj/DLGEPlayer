@@ -216,6 +216,7 @@ name = "importer"
 version = "0.1.0"
 dependencies = [
  "bea",
+ "stcm2l",
 ]
 
 [[package]]
