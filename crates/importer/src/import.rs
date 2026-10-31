@@ -59,6 +59,8 @@ pub struct Options {
     pub quality: f32,
     /// The audio groups to convert. All groups if empty.
     pub audio_groups: Vec<String>,
+    /// The number of threads. All CPU cores if `None`.
+    pub jobs: Option<usize>,
 }
 
 impl Default for Options {
@@ -66,6 +68,7 @@ impl Default for Options {
         Options {
             quality: 0.4,
             audio_groups: Vec::new(),
+            jobs: None,
         }
     }
 }
@@ -165,6 +168,20 @@ pub struct Manifest {
 
 /// Imports a dump into `out`. `progress` receives a line for each step.
 pub fn run(
+    source: &Source,
+    out: &Path,
+    options: &Options,
+    progress: &(dyn Fn(&str) + Sync),
+) -> Result<Manifest> {
+    let mut pool = rayon::ThreadPoolBuilder::new();
+    if let Some(jobs) = options.jobs {
+        pool = pool.num_threads(jobs.max(1));
+    }
+    pool.build()?
+        .install(|| run_in_pool(source, out, options, progress))
+}
+
+fn run_in_pool(
     source: &Source,
     out: &Path,
     options: &Options,

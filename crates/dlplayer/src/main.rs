@@ -33,6 +33,9 @@ enum Command {
         /// Convert only these audio groups: bgm, se, loopse, voice.
         #[arg(long, value_delimiter = ',')]
         audio: Vec<String>,
+        /// The number of threads. All CPU cores without this option.
+        #[arg(long)]
+        jobs: Option<usize>,
     },
     /// Work with CRI CPK archives.
     Cpk {
@@ -106,7 +109,8 @@ fn main() -> ExitCode {
             patch,
             quality,
             audio,
-        } => import(romfs, &out, patch, quality, audio),
+            jobs,
+        } => import(romfs, &out, patch, quality, audio, jobs),
         Command::Cpk { command } => match command {
             CpkCommand::List { archive } => cpk_list(&archive),
             CpkCommand::Extract { archive, out } => cpk_extract(&archive, &out),
@@ -337,12 +341,14 @@ fn import(
     mut roots: Vec<PathBuf>,
     quality: f32,
     audio_groups: Vec<String>,
+    jobs: Option<usize>,
 ) -> Result<()> {
     roots.push(romfs);
     let source = importer::import::Source { roots };
     let options = importer::import::Options {
         quality,
         audio_groups,
+        jobs,
     };
     let start = std::time::Instant::now();
     let manifest = importer::import::run(&source, out, &options, &|line| {
