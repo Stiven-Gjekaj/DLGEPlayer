@@ -85,6 +85,14 @@ All 878 rows give the size of their texture. All 9969 frames of the
 expressions are inside their sheet and their body. `dlplayer sprite`
 builds a sprite with an expression.
 
+The scripts name a sprite with two strings: a pose such as `ayaU_03`, and
+the pose with an expression such as `ayaU_03_cho`. A row name is the pose
+with a number before it and a size letter after it, for example
+`01_ayaU_03_A`. In the JP scripts, 45588 calls have two string arguments.
+For 39686 of them, the names match a row and an expression of that row.
+The other calls use names that do not match yet, for example `her_03`,
+`car_02`, `shuu_03`, and `kan_03d_tujo`.
+
 ## BIN_ tables
 
 The `static/*.bin` files use the format `BIN_`. The header:
