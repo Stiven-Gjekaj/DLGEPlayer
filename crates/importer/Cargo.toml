@@ -8,3 +8,4 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+bea.workspace = true
