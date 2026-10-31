@@ -8,6 +8,9 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+bea.workspace = true
+bntx.workspace = true
 clap = { version = "4.6.7", features = ["derive"] }
 cpk.workspace = true
+png = "0.18.1"
 stcm2l.workspace = true

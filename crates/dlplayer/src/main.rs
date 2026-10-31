@@ -30,6 +30,21 @@ enum Command {
     },
     /// Write a listing and a text file for each script in a CPK archive.
     DumpScripts { archive: PathBuf, out: PathBuf },
+    /// Work with Bezel Engine archives.
+    Bea {
+        #[command(subcommand)]
+        command: BeaCommand,
+    },
+    /// Write the first texture of a .bea or a .bntx file as a PNG image.
+    Texture { file: PathBuf, out: PathBuf },
+}
+
+#[derive(Subcommand)]
+enum BeaCommand {
+    /// Print the files in an archive.
+    List { archive: PathBuf },
+    /// Write all files of an archive to a directory.
+    Extract { archive: PathBuf, out: PathBuf },
 }
 
 #[derive(Subcommand)]
@@ -51,6 +66,11 @@ fn main() -> ExitCode {
         },
         Command::Disasm { file, strings } => disasm(&file, strings),
         Command::DumpScripts { archive, out } => dump_scripts(&archive, &out),
+        Command::Bea { command } => match command {
+            BeaCommand::List { archive } => bea_list(&archive),
+            BeaCommand::Extract { archive, out } => bea_extract(&archive, &out),
+        },
+        Command::Texture { file, out } => texture(&file, &out),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -159,6 +179,62 @@ fn dump_scripts(path: &Path, out: &Path) -> Result<()> {
     if failed > 0 {
         return Err(format!("{failed} scripts did not parse").into());
     }
+    Ok(())
+}
+
+fn read_file(path: &Path) -> Result<Vec<u8>> {
+    Ok(std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
+}
+
+fn bea_list(path: &Path) -> Result<()> {
+    let bytes = read_file(path)?;
+    let archive = bea::Archive::parse(&bytes)?;
+    for e in &archive.entries {
+        println!("{:>10} {:>10} {}", e.stored_size, e.size, e.name);
+    }
+    eprintln!("{} files in {}", archive.entries.len(), archive.name);
+    Ok(())
+}
+
+fn bea_extract(path: &Path, out: &Path) -> Result<()> {
+    let bytes = read_file(path)?;
+    let archive = bea::Archive::parse(&bytes)?;
+    for e in &archive.entries {
+        let target = safe_join(out, &e.name)?;
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&target, archive.read(e)?)?;
+    }
+    eprintln!("wrote {} files to {}", archive.entries.len(), out.display());
+    Ok(())
+}
+
+fn texture(path: &Path, out: &Path) -> Result<()> {
+    let bytes = read_file(path)?;
+    let bntx_bytes = if bytes.starts_with(bea::MAGIC) {
+        let archive = bea::Archive::parse(&bytes)?;
+        let entry = archive
+            .entries
+            .iter()
+            .find(|e| e.name.ends_with(".dds") || e.name.ends_with(".ftxb"))
+            .ok_or("the archive holds no texture")?;
+        archive.read(entry)?
+    } else {
+        bytes
+    };
+    let textures = bntx::parse(&bntx_bytes)?;
+    let t = textures.first().ok_or("the file holds no texture")?;
+    let rgba = t.to_rgba8()?;
+    let file = std::fs::File::create(out)?;
+    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), t.width, t.height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header()?.write_image_data(&rgba)?;
+    eprintln!(
+        "{}: {}x{}, format {:#x}",
+        t.name, t.width, t.height, t.format_code
+    );
     Ok(())
 }
 
