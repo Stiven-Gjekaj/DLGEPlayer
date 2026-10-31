@@ -125,6 +125,8 @@ The tool is `target/release/dlplayer`.
 | `dlplayer dump-scripts romfs/script.cpk scripts_text` | Writes a `.asm` listing and a `.txt` file for each script |
 | `dlplayer bea list romfs/Archive/title.nxonnx32.bea` | Prints the files in a Bezel Engine archive |
 | `dlplayer texture "romfs/Archive/texture~bg~bg01b.dds.nxonnx32.bea" bg01b.png` | Writes a texture as a PNG image |
+| `dlplayer table "romfs/Archive/static~speaker.bin.nxonnx32.bea"` | Prints a table of the game |
+| `dlplayer sprite romfs/Archive 01_aya_01_A emi aya.png` | Writes a sprite with an expression as a PNG image |
 
 ## Crates
 
@@ -134,7 +136,7 @@ The tool is `target/release/dlplayer`.
 | `stcm2l` | Reads and writes STCM2L scripts, and writes listings |
 | `bea` | Reads Bezel Engine archives |
 | `bntx` | Decodes BNTX textures to RGBA pixels |
-| `importer` | Converts a dump into a normalized folder. Empty. |
+| `importer` | Converts a dump into a normalized folder. Builds sprites now. |
 | `vm` | Runs the script bytecode. Empty. |
 | `player` | The Godot 4 extension. Empty. |
 | `dlplayer` | The command line tool |

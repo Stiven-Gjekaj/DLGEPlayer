@@ -23,6 +23,12 @@
   decode.
 - `dlplayer bea list`, `dlplayer bea extract`, and `dlplayer texture` read
   archives and write a texture as a PNG image.
+- The `bea` crate reads `BIN_` tables, such as `static/chara.bin`. All 9
+  tables of the dump read.
+- The `importer` crate builds a character sprite with an expression from
+  its sheet. All 878 sprites and 9969 frames fit.
+- `dlplayer table` prints a table, and `dlplayer sprite` writes a sprite as
+  a PNG image.
 - `dlplayer cpk list` and `dlplayer cpk extract` read archives.
 - `dlplayer disasm` prints the listing or the text of one script.
 - `dlplayer dump-scripts` writes a listing and a text file for each script
