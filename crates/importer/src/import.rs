@@ -137,11 +137,10 @@ impl Source {
                     }
                 }
                 Root::RomFs(fs) => {
+                    // No buffer: the readers of the importer read large
+                    // parts, and a buffer decrypts bytes that a seek drops.
                     if let Some(region) = fs.file(path) {
-                        return Ok(Some(Box::new(BufReader::with_capacity(
-                            1 << 20,
-                            region.reader(),
-                        ))));
+                        return Ok(Some(Box::new(region.reader())));
                     }
                 }
             }
