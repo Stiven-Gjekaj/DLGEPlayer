@@ -7,4 +7,5 @@ pub mod image;
 pub mod import;
 pub mod ir;
 pub mod lip;
+pub mod patch;
 pub mod sprite;

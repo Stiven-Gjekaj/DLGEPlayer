@@ -30,6 +30,7 @@ use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
 use serde::Serialize;
 
+use crate::patch::PatchSet;
 use crate::{adx, audio, image, ir, lip, sprite};
 
 /// The version of the folder format. A change that the player cannot
@@ -89,11 +90,22 @@ pub trait ReadSeek: Read + Seek + Send {}
 impl<T: Read + Seek + Send> ReadSeek for T {}
 
 /// A list of RomFS roots. The first root that holds a path gives the file.
+/// The translation changes the files of scripts and archives after they
+/// are read.
 pub struct Source {
     pub roots: Vec<Root>,
+    pub translation: Option<PatchSet>,
 }
 
 impl Source {
+    /// Applies the translation to a file, if it has a delta for the key.
+    pub fn translate(&self, key: &str, data: Vec<u8>) -> Result<Vec<u8>> {
+        match &self.translation {
+            Some(set) => set.apply(key, data),
+            None => Ok(data),
+        }
+    }
+
     /// Tells if a path is a file in a root.
     pub fn contains(&self, path: &str) -> bool {
         self.roots.iter().any(|root| match root {
@@ -435,7 +447,7 @@ fn import_scripts(
     for entry in &entries {
         let path = format!("script.cpk/{}", entry.path());
         let result = (|| -> Result<(String, String)> {
-            let data = archive.read(entry)?;
+            let data = source.translate(&path, archive.read(entry)?)?;
             let script = stcm2l::Script::parse(&data)?;
             let name = stem(&entry.name).to_string();
             let program = ir::build(&name, &script)?;
@@ -455,10 +467,11 @@ fn import_scripts(
 
 /// Reads the first file of an archive in `Archive/`.
 fn read_archive_first(source: &Source, archive: &str) -> Result<Vec<u8>> {
-    let bytes = source.read(&format!("Archive/{archive}"))?;
+    let path = format!("Archive/{archive}");
+    let bytes = source.read(&path)?;
     let parsed = bea::Archive::parse(&bytes)?;
     let entry = parsed.entries.first().ok_or("the archive is empty")?;
-    Ok(parsed.read(entry)?)
+    source.translate(&format!("{path}/{}", entry.name), parsed.read(entry)?)
 }
 
 fn import_tables(
@@ -591,7 +604,8 @@ fn import_ui(
         for entry in parsed.entries.iter().filter(|e| e.name.ends_with(".lyt")) {
             let layout = stem(&entry.name).to_string();
             let result = (|| -> Result<UiEntry> {
-                let data = parsed.read(entry)?;
+                let data =
+                    source.translate(&format!("{path}/{}", entry.name), parsed.read(entry)?)?;
                 let mut files = UiEntry::default();
                 for f in sarc::parse(&data)? {
                     let name = stem(&f.name).to_string();
@@ -876,6 +890,7 @@ mod tests {
                 Root::Dir(dump.clone()),
                 Root::RomFs(Arc::new(fs)),
             ],
+            translation: None,
         };
         let text = |p: &str| String::from_utf8(source.read(p).unwrap()).unwrap();
         assert_eq!(text("dir/a.txt"), patch.to_string_lossy());
