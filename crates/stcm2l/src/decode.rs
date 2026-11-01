@@ -12,7 +12,7 @@ use crate::script::{Action, Param, Script};
 /// The value of one parameter.
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize),
+    derive(serde::Serialize, serde::Deserialize),
     serde(rename_all = "snake_case")
 )]
 #[derive(Debug, Clone, PartialEq)]
@@ -35,7 +35,7 @@ pub enum Value {
 /// An operator of the built-in arithmetic opcodes.
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize),
+    derive(serde::Serialize, serde::Deserialize),
     serde(rename_all = "snake_case")
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +71,7 @@ const BINARY_OPS: [BinaryOp; 10] = [
 /// An operator of the comparison in `IfFalseGoto`.
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize),
+    derive(serde::Serialize, serde::Deserialize),
     serde(rename_all = "snake_case")
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,7 +96,7 @@ const COMPARES: [Compare; 6] = [
 /// One typed instruction.
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize),
+    derive(serde::Serialize, serde::Deserialize),
     serde(tag = "type", rename_all = "snake_case")
 )]
 #[derive(Debug, Clone, PartialEq)]
@@ -688,5 +688,32 @@ mod tests {
             serde_json::to_string(&update).unwrap(),
             r#"{"type":"update","op":"add","dest":{"global":4},"value":{"int":1}}"#
         );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn reads_instructions_from_json() {
+        let all = [
+            Instruction::Call {
+                target: 3,
+                args: vec![Value::Text("her_01".into()), Value::Immediate(0)],
+            },
+            Instruction::Update {
+                op: None,
+                dest: Value::Global(4),
+                value: Value::Float(1.5),
+            },
+            Instruction::IfFalseGoto {
+                left: Value::Global(0),
+                compare: Compare::Eq,
+                right: Value::Int(1),
+                target: 9,
+            },
+            Instruction::ShowMessage,
+        ];
+        for i in all {
+            let json = serde_json::to_string(&i).unwrap();
+            assert_eq!(serde_json::from_str::<Instruction>(&json).unwrap(), i);
+        }
     }
 }
