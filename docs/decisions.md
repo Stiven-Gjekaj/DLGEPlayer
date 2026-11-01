@@ -93,7 +93,9 @@ Each entry gives the reason.
   player reads only the import folder, and a phone has little space.
 - **The app never holds keys.** The user brings them.
 - **The English patch comes with the app.** The owner has the permission
-  of the patch authors, given on 2026-11-01. The app credits them. The
+  of the patch authors, given on 2026-11-01. The app credits them:
+  otomvevn for Haunted Dark Bridal and dialovers-translations for
+  MORE,BLOOD. The
   app ships only the work of the translators: the English text and the
   changes to the user interface images. It does not ship the patched
   `script.cpk` or the patched `.bea` files, because they also hold the

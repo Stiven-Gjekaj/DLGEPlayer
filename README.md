@@ -193,6 +193,16 @@ DLGE_SCRIPTS=scripts DLGE_ARCHIVES=romfs/Archive cargo test --workspace --releas
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to help |
 | [AGENTS.md](AGENTS.md) | The rules for each change, by a human or an agent |
 
+## Credits
+
+The English translation comes from the community English patch. Its
+authors gave permission to ship it with DLGE Player.
+
+| Game | Translation |
+| ---- | ----------- |
+| Haunted Dark Bridal | otomvevn |
+| MORE,BLOOD | dialovers-translations |
+
 ## Support
 
 If you find DLGE Player useful, you can support its development here.
