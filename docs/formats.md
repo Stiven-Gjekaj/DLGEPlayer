@@ -194,6 +194,21 @@ number of integer slots is a multiple of 2. The strings are Shift-JIS.
 The English patch replaces `bg.bin`, `select.bin`, and `speaker.bin`. The
 patched `speaker.bin` has the English names.
 
+The VM uses 4 tables:
+
+- `script.bin`: the game (0 or 1) and the number of each script. The two
+  games use the same numbers, so `0x44f` looks up the number in the game
+  of the current script.
+- `flag.bin`: the script flags, for example `switch`, `select`, and
+  `character`.
+- `flagsys.bin`: the system flags. Most of them record the end of a
+  chapter, for example `aya_Dark03_end`, or an unlock, for example
+  `syuu_vampireAF_open`. The menu of the game uses them to open chapters.
+- `select.bin`: the options of 500 choices. 499 choices have 2 options and
+  one has 4. The 3 values of an option are probably points: a kind (0 to
+  3), an amount (0 or 5), and a character (1 to 6). The scripts read only
+  the index of the pick, from the flag `select`.
+
 ## Layouts
 
 A `.lyt` file is a SARC archive. The `sarc` crate reads it. The 84 layouts
@@ -453,6 +468,8 @@ such as `’` and `ー`. It has name tokens such as `#Name[2]`.
   `LuaR`). The importer does not convert them.
 - The font `font/main.bffnt` is not decoded.
 - The meaning of the user data and of the control data of the layouts.
+- The menu that opens the chapters and that uses the points of the
+  choices is a Lua script. It is not converted.
 
 - The text has some rare characters where the context needs punctuation.
   For example, `ゞ` appears after `なに`. The font of the game possibly
