@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- `dlplayer import` converts a dump into the folder that the player reads,
+  with `manifest.json`. The full JP dump imports with no failure.
+- The import writes each script as JSON IR. A code address becomes an
+  instruction index. All 706 JP and 706 EN scripts convert.
+- The import converts all 38546 HCA files and the 5 ADX menu sounds of
+  `SystemSE.acb` to Ogg Vorbis. A looped track ends at its loop end.
+- The import writes all standalone textures, the `RAW_` copyright image,
+  the 878 sprite sheets, and the 1163 UI textures as PNG.
+- The `lyt` crate reads `.bflyt` layouts and `.bflan` animations. All 521
+  layouts and 348 animations read, and the import writes them as JSON.
+- The import writes the `BIN_` tables and the lip sync data of `lip.cpk`
+  as JSON.
+- `--patch` puts the English patch over the dump. `--jobs` limits the
+  threads.
+- The sprite resolver reads the expression `tyo` as `cho`. All 45588 sprite
+  calls resolve.
+- `dlplayer audio` converts one HCA file to Ogg Vorbis.
 - The `cpk` crate reads CRI CPK archives by TOC or by ITOC.
 - The `cpk` crate decompresses CRILAYLA data.
 - The `stcm2l` crate reads and writes STCM2L scripts. All 706 scripts of the

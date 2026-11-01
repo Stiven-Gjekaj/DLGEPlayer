@@ -32,9 +32,10 @@ _Haunted Dark Bridal and MORE,BLOOD, on your computer and your phone, from your 
 ---
 
 > [!NOTE]
-> **Phase 1 of 8 is done. The player does not run the game yet.**
-> The tools read the archives and the scripts of the game. All 706 scripts
-> of the Switch release parse, write back byte for byte, and dump to text.
+> **Phases 1 to 4 of 8 are done. The player does not run the game yet.**
+> `dlplayer import` converts a dump into the folder that the player reads:
+> all 706 scripts as IR, all images and sprites as PNG, all audio as Ogg
+> Vorbis, the layouts as JSON, and the movies.
 > [docs/roadmap.md](docs/roadmap.md) gives the next phases.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes.
 
@@ -70,20 +71,24 @@ community English patch over the dump.
 
 Done:
 
-- Read CRI CPK archives by TOC or by ITOC
-- Decompress CRILAYLA data
+- Read CRI CPK archives by TOC or by ITOC, and decompress CRILAYLA data
 - Read and write STCM2L scripts, byte for byte
-- Decode the parameters and the data blocks of each action
-- Write each script as a listing and as text, with the Shift-JIS text
-  decoded
+- Decode each action into a typed instruction, with the meaning of the
+  opcodes in [docs/opcodes.md](docs/opcodes.md)
+- Read Bezel Engine archives, BNTX textures, `BIN_` tables, and SARC
+  archives
+- Read NintendoWare `.bflyt` layouts and `.bflan` animations
+- Build the character sprites with their expressions
+- Convert HCA and ADX audio to Ogg Vorbis
+- Import a dump into a normalized folder with one command, with the English
+  patch as an option
 
 Planned:
 
-- The meaning of each opcode ([phase 2](docs/roadmap.md))
-- Read the Bezel Engine `.bea` archives: textures, sprites, and layouts
-- The importer, the VM, and the Godot player
+- The VM that runs the IR ([phase 5](docs/roadmap.md))
+- The Godot player
 - Builds for Windows, macOS, Linux, Android, and iOS
-- The English patch
+- The English text in the player
 
 ## You need a copy of the game
 
@@ -114,10 +119,28 @@ You need Rust 1.88 or later.
 
 The tool is `target/release/dlplayer`.
 
+## Import a dump
+
+    dlplayer import romfs imported
+
+The command writes the folder `imported` with a `manifest.json`. A full
+import takes 4 to 5 minutes on 10 cores and writes 6.6 GB.
+
+- `--patch <dir>` puts the files of a patch over the dump, for example the
+  RomFS of the English patch.
+- `--jobs <n>` uses `n` threads. Without it, the import uses all cores.
+- `--quality <q>` sets the Vorbis quality, from -0.2 to 1.0. The default is
+  0.4.
+- `--audio bgm,se` converts only these audio groups: `bgm`, `se`,
+  `loopse`, `voice`, and `system`.
+
+[docs/formats.md](docs/formats.md#the-import-folder) describes the folder.
+
 ## Commands
 
 | Command | Result |
 | ------- | ------ |
+| `dlplayer import romfs imported` | Converts a dump into the folder that the player reads |
 | `dlplayer cpk list romfs/script.cpk` | Prints the files in an archive |
 | `dlplayer cpk extract romfs/script.cpk scripts` | Writes the files of an archive to a directory |
 | `dlplayer disasm scripts/mb_aya_Dark_01.dat` | Prints the listing of one script |
@@ -128,6 +151,7 @@ The tool is `target/release/dlplayer`.
 | `dlplayer table "romfs/Archive/static~speaker.bin.nxonnx32.bea"` | Prints a table of the game |
 | `dlplayer sprite romfs/Archive 01_aya_01_A emi aya.png` | Writes a sprite with an expression as a PNG image |
 | `dlplayer layout romfs/Archive/title.nxonnx32.bea title` | Writes the files of the layouts and their textures |
+| `dlplayer audio BGM01.hca BGM01.ogg` | Converts an HCA file to Ogg Vorbis |
 
 ## Crates
 
@@ -138,7 +162,8 @@ The tool is `target/release/dlplayer`.
 | `bea` | Reads Bezel Engine archives |
 | `bntx` | Decodes BNTX textures to RGBA pixels |
 | `sarc` | Reads SARC archives, such as the layouts |
-| `importer` | Converts a dump into a normalized folder. Builds sprites now. |
+| `lyt` | Reads NintendoWare `.bflyt` layouts and `.bflan` animations |
+| `importer` | Converts a dump into a normalized folder: the script IR, the images, the sprites, the audio, and the layouts |
 | `vm` | Runs the script bytecode. Empty. |
 | `player` | The Godot 4 extension. Empty. |
 | `dlplayer` | The command line tool |
@@ -148,16 +173,21 @@ The tool is `target/release/dlplayer`.
     cargo test --workspace
 
 The tests build the data that they need. They do not read a copy of the
-game. The corpus test reads real scripts only if you set `DLGE_SCRIPTS` to a
-directory of extracted `.dat` files:
+game. The corpus tests read a real dump only if you set these variables:
 
-    DLGE_SCRIPTS=scripts cargo test -p stcm2l --test corpus
+- `DLGE_SCRIPTS`: a directory of extracted `.dat` scripts
+- `DLGE_ARCHIVES`: the `Archive` directory of the RomFS
+
+```
+DLGE_SCRIPTS=scripts DLGE_ARCHIVES=romfs/Archive cargo test --workspace --release
+```
 
 ## Documentation
 
 | File | Contents |
 | ---- | -------- |
-| [docs/formats.md](docs/formats.md) | The CPK, CRILAYLA, and STCM2L formats, and the layout of the RomFS |
+| [docs/formats.md](docs/formats.md) | The formats of the game, the layout of the RomFS, and the import folder |
+| [docs/opcodes.md](docs/opcodes.md) | The script VM of the game and the meaning of the opcodes |
 | [docs/roadmap.md](docs/roadmap.md) | The phases, the platforms, and the risks |
 | [docs/decisions.md](docs/decisions.md) | Each decision and its reason |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to help |
