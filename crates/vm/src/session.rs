@@ -4,7 +4,7 @@
 //! flag command changes the flags. A choice asks the player and writes the
 //! pick to the flag `select`. Then:
 //!
-//! - after `End`, the chapter is over;
+//! - after `End` or `Finish`, the chapter is over;
 //! - after `JumpLabel`, the label of this script runs;
 //! - after `JumpScript`, the label of another script runs;
 //! - else the same label runs again. A script uses the flag `switch` to go
@@ -46,6 +46,10 @@ pub trait Host {
     fn command(&mut self, _command: &Command) {}
     /// Picks an option of a choice. Gives the index of the option.
     fn choose(&mut self, name: &str, options: &[ChoiceOption]) -> usize;
+    /// Picks a character on the character select, from 1 to 6.
+    fn choose_character(&mut self) -> i32 {
+        1
+    }
 }
 
 /// The state that a save keeps.
@@ -73,6 +77,8 @@ pub struct Session<'p> {
     label: String,
     pub flags: Flags,
     idle: u32,
+    /// The instructions that ran in the scripts before the current one.
+    earlier: BTreeMap<String, Vec<bool>>,
 }
 
 impl<'p> Session<'p> {
@@ -98,6 +104,7 @@ impl<'p> Session<'p> {
             label: label.to_string(),
             flags,
             idle: 0,
+            earlier: BTreeMap::new(),
         })
     }
 
@@ -111,6 +118,7 @@ impl<'p> Session<'p> {
             label: save.label,
             flags: save.flags,
             idle: 0,
+            earlier: BTreeMap::new(),
         })
     }
 
@@ -132,9 +140,11 @@ impl<'p> Session<'p> {
         &self.label
     }
 
-    /// Gives the instructions of the current script that ran.
-    pub fn visited(&self) -> &[bool] {
-        &self.machine.visited
+    /// Gives the instructions that ran, for each script of the session.
+    pub fn visited(&self) -> BTreeMap<String, Vec<bool>> {
+        let mut all = self.earlier.clone();
+        merge(&mut all, self.script(), &self.machine.visited);
+        all
     }
 
     /// Runs the label and plays its commands.
@@ -169,7 +179,11 @@ impl<'p> Session<'p> {
                 Command::JumpScript { number, label } => {
                     next = Some((Some(*number), label.clone()))
                 }
-                Command::End => end = true,
+                Command::SelectCharacter => {
+                    let pick = host.choose_character();
+                    self.flags.script.insert("character".into(), pick);
+                }
+                Command::End | Command::Finish => end = true,
                 _ => {}
             }
         }
@@ -179,12 +193,15 @@ impl<'p> Session<'p> {
         match next {
             Some((None, label)) => self.label = label,
             Some((Some(number), label)) => {
+                let game = self.program.games.get(self.script()).copied().unwrap_or(0);
                 let name = self
                     .program
                     .numbers
-                    .get(&number)
+                    .get(&(game, number))
                     .ok_or_else(|| Error::UnknownScript(format!("number {number}")))?;
-                self.machine = Machine::new(self.program.script(name)?);
+                let old =
+                    std::mem::replace(&mut self.machine, Machine::new(self.program.script(name)?));
+                merge(&mut self.earlier, &old.script.name, &old.visited);
                 self.label = label;
             }
             None => {}
@@ -208,5 +225,15 @@ impl<'p> Session<'p> {
             }
         }
         Err(Error::Stuck(self.script().to_string(), self.label.clone()))
+    }
+}
+
+/// Adds the instructions that ran in a script to a map.
+pub fn merge(all: &mut BTreeMap<String, Vec<bool>>, script: &str, visited: &[bool]) {
+    let seen = all
+        .entry(script.to_string())
+        .or_insert_with(|| vec![false; visited.len()]);
+    for (a, b) in seen.iter_mut().zip(visited) {
+        *a |= b;
     }
 }

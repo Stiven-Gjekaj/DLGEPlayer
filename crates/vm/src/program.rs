@@ -46,8 +46,11 @@ pub struct Program {
     dir: Option<PathBuf>,
     files: BTreeMap<String, String>,
     cache: Mutex<HashMap<String, Arc<ScriptIr>>>,
-    /// The script names by their number in `script.bin`.
-    pub numbers: BTreeMap<i32, String>,
+    /// The script names by the game and the number in `script.bin`. The two
+    /// games use the same numbers.
+    pub numbers: BTreeMap<(i32, i32), String>,
+    /// The game of each script in `script.bin`.
+    pub games: BTreeMap<String, i32>,
     /// The first values of the script flags, from `flag.bin`.
     pub flags: BTreeMap<String, i32>,
     /// The first values of the system flags, from `flagsys.bin`.
@@ -86,8 +89,9 @@ impl Program {
         program.dir = Some(dir.to_path_buf());
         program.files = manifest.scripts;
         for row in table("script")? {
-            if let (Some(n), Some(name)) = (row.get(1), row.get(2)) {
-                program.numbers.insert(int(n), text(name));
+            if let (Some(g), Some(n), Some(name)) = (row.first(), row.get(1), row.get(2)) {
+                program.numbers.insert((int(g), int(n)), text(name));
+                program.games.insert(text(name), int(g));
             }
         }
         for (target, name) in [
@@ -123,6 +127,7 @@ impl Program {
             files: BTreeMap::new(),
             cache: Mutex::new(HashMap::new()),
             numbers: BTreeMap::new(),
+            games: BTreeMap::new(),
             flags: BTreeMap::new(),
             system_flags: BTreeMap::new(),
             choices: BTreeMap::new(),

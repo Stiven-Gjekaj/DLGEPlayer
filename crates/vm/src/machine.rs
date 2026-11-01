@@ -115,6 +115,12 @@ pub enum Command {
     },
     /// End the chapter (`0x700`).
     End,
+    /// End a scene that does not go back to the chapter, for example an
+    /// ending or a replay of the gallery (`0x4bf`).
+    Finish,
+    /// Show the character select. The pick goes to the flag `character`
+    /// (`0x6fe`).
+    SelectCharacter,
     /// An opcode with no handler in the game. The game stops on it.
     Unregistered {
         opcode: u32,
@@ -388,6 +394,8 @@ impl Machine {
                 name: self.text_arg(args, 1)?,
             }),
             0x700 => out.push(Command::End),
+            0x4bf => out.push(Command::Finish),
+            0x6fe => out.push(Command::SelectCharacter),
             _ => out.push(Command::Engine {
                 opcode,
                 args: self.args(args)?,

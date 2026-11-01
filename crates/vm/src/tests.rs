@@ -245,6 +245,50 @@ fn continues_from_a_save() {
 }
 
 #[test]
+fn ends_on_finish_and_asks_for_a_character() {
+    let mut program = Program::empty();
+    program.insert(ScriptIr {
+        name: "pro".into(),
+        exports: BTreeMap::from([("sure1".into(), 0)]),
+        globals: BTreeMap::from([(0, V::Int(0))]),
+        code: vec![
+            engine(0x41d, vec![text("character"), V::Global(0)]),
+            I::IfFalseGoto {
+                left: V::Global(0),
+                compare: Compare::Eq,
+                right: V::Int(3),
+                target: 5,
+            },
+            I::TextLine {
+                text: "three".into(),
+            },
+            I::ShowMessage,
+            engine(0x4bf, vec![]),
+            // 5
+            engine(0x6fe, vec![]),
+            I::Return,
+        ],
+    });
+    struct Pick3(Vec<Command>);
+    impl Host for Pick3 {
+        fn command(&mut self, c: &Command) {
+            self.0.push(c.clone());
+        }
+        fn choose(&mut self, _: &str, _: &[ChoiceOption]) -> usize {
+            0
+        }
+        fn choose_character(&mut self) -> i32 {
+            3
+        }
+    }
+    let mut session = Session::new(&program, "pro", "sure1").unwrap();
+    let mut host = Pick3(vec![]);
+    assert_eq!(session.run_chapter(&mut host, 10).unwrap(), 2);
+    assert_eq!(session.flags.script["character"], 3);
+    assert_eq!(messages(&host.0), ["three"]);
+}
+
+#[test]
 fn reports_problems() {
     let program = chapter();
     assert!(Session::new(&program, "none", "sure1").is_err());

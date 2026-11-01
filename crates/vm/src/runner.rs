@@ -4,12 +4,16 @@
 //! runs each chapter several times:
 //!
 //! - once for each option index: the host picks the same index at each
-//!   choice, or the last option if the choice has fewer;
-//! - once with every system flag set to 1, as in a finished game.
+//!   choice, or the last option if the choice has fewer. On the character
+//!   select, it picks the character with the same index;
+//! - once with the system flags of a finished game: each flag with a name
+//!   that ends in `_end` or `_open` is 1.
 //!
 //! A route is the chapters with the same name and a number at the end, for
 //! example `mb_aya_Dark_00` to `mb_aya_Dark_12`. The runner also runs each
-//! route in order, with the system flags of one chapter given to the next.
+//! route in order, with the flags of one chapter given to the next, as in
+//! the game. A single run of a chapter starts with the flag `character` of
+//! its pick, because a chapter after the character select reads it.
 //!
 //! The coverage counts the instructions that ran, out of the instructions
 //! that the `sure` labels can reach.
@@ -24,7 +28,9 @@ use crate::program::{ChoiceOption, Program, ScriptIr};
 use crate::session::{Flags, Host, Session};
 
 /// The largest number of runs in one chapter.
-const RUN_LIMIT: usize = 100_000;
+const RUN_LIMIT: usize = 5_000;
+/// The number of characters on the character select.
+const CHARACTERS: usize = 6;
 
 /// A host that picks the same option index each time and counts commands.
 struct Policy {
@@ -62,6 +68,9 @@ impl Host for Policy {
         self.choices += 1;
         self.pick.min(options.len().saturating_sub(1))
     }
+    fn choose_character(&mut self) -> i32 {
+        (self.pick % CHARACTERS) as i32 + 1
+    }
 }
 
 /// The result of one run of a chapter.
@@ -82,6 +91,10 @@ pub struct Coverage {
     pub instructions: usize,
     pub reachable: usize,
     pub visited: usize,
+    /// The text lines that the `sure` labels can reach.
+    pub text_reachable: usize,
+    /// The reachable text lines that ran.
+    pub text_visited: usize,
 }
 
 /// The result of one route.
@@ -161,11 +174,8 @@ fn run_one(
     let result = session
         .run_chapter(host, RUN_LIMIT)
         .map_err(|e| e.to_string());
-    let seen = visited
-        .entry(session.script().to_string())
-        .or_insert_with(|| vec![false; session.visited().len()]);
-    for (a, b) in seen.iter_mut().zip(session.visited()) {
-        *a |= b;
+    for (name, seen) in session.visited() {
+        crate::session::merge(visited, &name, &seen);
     }
     (result, session.flags)
 }
@@ -173,25 +183,27 @@ fn run_one(
 /// Runs every chapter and every route.
 pub fn run_all(program: &Program, progress: &dyn Fn(&str)) -> Report {
     let mut report = Report::default();
-    let names: Vec<String> = program
-        .numbers
-        .values()
-        .filter(|n| program.names().any(|m| m == n.as_str()))
-        .cloned()
-        .collect();
+    let names: Vec<String> = program.names().map(str::to_string).collect();
     let picks = program
         .choices
         .values()
         .map(Vec::len)
         .max()
         .unwrap_or(1)
-        .max(1);
+        .max(CHARACTERS);
     let fresh = Flags {
         script: program.flags.clone(),
         system: program.system_flags.clone(),
     };
     let mut finished = fresh.clone();
-    finished.system.values_mut().for_each(|v| *v = 1);
+    // A finished game has the end of each chapter and each unlock. The
+    // other system flags are settings and debug switches.
+    for (name, value) in finished.system.iter_mut() {
+        if name.ends_with("_end") || name.ends_with("_open") {
+            *value = 1;
+        }
+    }
+    finished.script.insert("character".into(), 1);
 
     let mut visited: BTreeMap<String, Vec<bool>> = BTreeMap::new();
     let mut choices = BTreeSet::new();
@@ -199,7 +211,15 @@ pub fn run_all(program: &Program, progress: &dyn Fn(&str)) -> Report {
     for (n, name) in names.iter().enumerate() {
         let mut all_ended = true;
         let modes = (0..picks)
-            .map(|p| (format!("pick {p}"), p, fresh.clone()))
+            .map(|p| {
+                // A chapter after the character select reads the pick of an
+                // earlier chapter.
+                let mut flags = fresh.clone();
+                flags
+                    .script
+                    .insert("character".into(), (p % CHARACTERS) as i32 + 1);
+                (format!("pick {p}"), p, flags)
+            })
             .chain([("finished game".to_string(), 0, finished.clone())]);
         for (mode, pick, flags) in modes {
             let mut host = Policy::new(pick);
@@ -273,10 +293,7 @@ pub fn run_all(program: &Program, progress: &dyn Fn(&str)) -> Report {
             match result {
                 Ok(_) => {
                     run.ended += 1;
-                    flags = Flags {
-                        script: program.flags.clone(),
-                        system: after.system,
-                    };
+                    flags = after;
                 }
                 Err(e) => {
                     run.error = Some(format!("{name}: {e}"));
@@ -293,18 +310,21 @@ pub fn run_all(program: &Program, progress: &dyn Fn(&str)) -> Report {
         };
         let reach = reachable(&script);
         let seen = visited.get(name.as_str());
+        let seen = |i: usize| seen.is_some_and(|s| s[i]);
+        let is_text = |i: usize| matches!(script.code[i], Instruction::TextLine { .. });
+        let reach: Vec<usize> = (0..reach.len()).filter(|&i| reach[i]).collect();
         let c = Coverage {
             instructions: script.code.len(),
-            reachable: reach.iter().filter(|&&r| r).count(),
-            visited: reach
-                .iter()
-                .enumerate()
-                .filter(|(i, r)| **r && seen.is_some_and(|s| s[*i]))
-                .count(),
+            reachable: reach.len(),
+            visited: reach.iter().filter(|&&i| seen(i)).count(),
+            text_reachable: reach.iter().filter(|&&i| is_text(i)).count(),
+            text_visited: reach.iter().filter(|&&i| is_text(i) && seen(i)).count(),
         };
         report.total.instructions += c.instructions;
         report.total.reachable += c.reachable;
         report.total.visited += c.visited;
+        report.total.text_reachable += c.text_reachable;
+        report.total.text_visited += c.text_visited;
         report.coverage.insert(name.clone(), c);
     }
     report
