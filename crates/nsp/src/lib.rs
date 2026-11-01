@@ -1,7 +1,10 @@
 //! Reads the RomFS of a game from an NSP file with the keys of the user.
 //!
 //! An NSP file is a PFS0 package. It holds NCA files and, for some
-//! dumps, a ticket.
+//! dumps, a ticket. The program NCA holds the RomFS in an encrypted
+//! section. `Game::open` finds the program NCA, decrypts its header and its
+//! section key, and reads the file table of the RomFS. The files decrypt
+//! when they are read, so the NSP is never copied.
 
 use std::fmt;
 use std::io;
@@ -9,9 +12,12 @@ use std::sync::Arc;
 
 mod crypto;
 pub mod keys;
+pub mod nca;
 pub mod pfs0;
+pub mod romfs;
 
 pub use keys::Keys;
+pub use romfs::RomFs;
 
 /// An error from the NSP reader.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,6 +28,8 @@ pub enum Error {
     /// The keys file does not have a key that the file needs.
     MissingKey(String),
     Unsupported(String),
+    /// The NSP has no program NCA with a RomFS.
+    NoProgram,
 }
 
 impl fmt::Display for Error {
@@ -34,6 +42,7 @@ impl fmt::Display for Error {
             Error::OutOfBounds(what) => write!(f, "{what} points outside the data"),
             Error::MissingKey(name) => write!(f, "the keys file has no {name}"),
             Error::Unsupported(what) => write!(f, "unsupported file: {what}"),
+            Error::NoProgram => write!(f, "the NSP has no program with a RomFS"),
         }
     }
 }
@@ -169,3 +178,58 @@ impl io::Seek for RegionReader {
         Ok(self.position)
     }
 }
+
+/// The game in an NSP file.
+pub struct Game {
+    /// The title ID of the program.
+    pub program_id: u64,
+    pub romfs: RomFs,
+}
+
+impl Game {
+    /// Opens the program NCA of an NSP file and reads its RomFS.
+    pub fn open(file: Arc<dyn ReadAt>, keys: &Keys) -> Result<Game> {
+        let entries = pfs0::read(&*file, 0)?;
+        let tickets: Vec<&pfs0::Entry> = entries
+            .iter()
+            .filter(|e| e.name.ends_with(".tik"))
+            .collect();
+        for entry in entries.iter().filter(|e| e.name.ends_with(".nca")) {
+            if entry.name.ends_with(".cnmt.nca") {
+                continue;
+            }
+            let region = Region::new(file.clone(), entry.offset, entry.size);
+            let header = nca::Header::read(&region, keys)?;
+            if header.content_type != nca::PROGRAM {
+                continue;
+            }
+            let Some(section) = header.romfs_section() else {
+                continue;
+            };
+            let key = if header.rights_id == [0; 16] {
+                header.key_area_key(keys)?
+            } else {
+                let name = format!("{}.tik", hex(&header.rights_id));
+                let ticket = tickets
+                    .iter()
+                    .find(|t| t.name.eq_ignore_ascii_case(&name))
+                    .ok_or_else(|| Error::MissingKey(format!("ticket {name}")))?;
+                let ticket = Region::new(file.clone(), ticket.offset, ticket.size).read_all()?;
+                nca::title_key(&ticket, header.key_revision(), keys)?
+            };
+            let data = section.data(region, &key)?;
+            return Ok(Game {
+                program_id: header.program_id,
+                romfs: RomFs::read(data)?,
+            });
+        }
+        Err(Error::NoProgram)
+    }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests;
