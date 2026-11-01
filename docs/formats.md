@@ -262,7 +262,7 @@ an object with one key, for example `{"int":5}` or `{"text":"..."}`.
 A looped audio track ends at its loop end. `manifest.json` gives the loop
 start in sample frames. The loop end is the end of the file.
 
-The full import of the JP dump takes about 4 minutes on 10 cores. It
+The full import of the JP dump takes 4 to 5 minutes on 10 cores. It
 writes 6.6 GB: 2.2 GB of audio, 1.7 GB of images, 1.4 GB of movies, and
 1.1 GB of sprites. `--jobs` sets the number of threads.
 
