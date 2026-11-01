@@ -282,7 +282,9 @@ dependencies = [
  "importer",
  "nsp",
  "sarc",
+ "serde_json",
  "stcm2l",
+ "vm",
 ]
 
 [[package]]

@@ -88,6 +88,15 @@ enum Command {
         #[arg(long)]
         keys: Option<PathBuf>,
     },
+    /// Run every chapter of an import folder with no screen, and report
+    /// the coverage.
+    Run {
+        /// The import folder.
+        folder: PathBuf,
+        /// Write the full report as JSON to this file.
+        #[arg(long)]
+        report: Option<PathBuf>,
+    },
     /// Convert an HCA audio file to Ogg Vorbis.
     Audio {
         file: PathBuf,
@@ -182,6 +191,7 @@ fn main() -> ExitCode {
         Command::Texture { file, out } => texture(&file, &out),
         Command::Table { file } => table(&file),
         Command::Layout { file, out } => layout(&file, &out),
+        Command::Run { folder, report } => run_chapters(&folder, report.as_deref()),
         Command::Audio { file, out, quality } => audio(&file, &out, quality),
         Command::Sprite {
             archives,
@@ -459,6 +469,65 @@ fn make_patch(input: &Path, patched: &Path, out: &Path, keys: Option<&Path>) -> 
         bytes.len(),
         out.display()
     );
+    Ok(())
+}
+
+fn run_chapters(folder: &Path, report_file: Option<&Path>) -> Result<()> {
+    let program = vm::Program::load(folder)?;
+    let start = std::time::Instant::now();
+    let report = vm::runner::run_all(&program, &|line| {
+        eprintln!("[{:>6.1}s] {line}", start.elapsed().as_secs_f32())
+    });
+    let failed: Vec<&vm::runner::ChapterRun> =
+        report.runs.iter().filter(|r| r.result.is_err()).collect();
+    for run in failed.iter().take(20) {
+        eprintln!(
+            "failed: {} ({}): {}",
+            run.script,
+            run.mode,
+            run.result.as_ref().unwrap_err()
+        );
+    }
+    let routes_ok = report.routes.iter().filter(|r| r.error.is_none()).count();
+    let t = &report.total;
+    println!(
+        "chapters: {} of {} end in every run",
+        report.chapters_ended, report.chapters
+    );
+    println!("runs: {}, failed: {}", report.runs.len(), failed.len());
+    println!(
+        "routes: {} of {} run to the end",
+        routes_ok,
+        report.routes.len()
+    );
+    println!(
+        "coverage: {} of {} reachable instructions ({:.1}%), {} instructions in all",
+        t.visited,
+        t.reachable,
+        100.0 * t.visited as f64 / t.reachable.max(1) as f64,
+        t.instructions
+    );
+    println!(
+        "text lines: {} of {} reachable lines ({:.1}%)",
+        t.text_visited,
+        t.text_reachable,
+        100.0 * t.text_visited as f64 / t.text_reachable.max(1) as f64
+    );
+    println!(
+        "messages: {}, choices: {}",
+        report.messages, report.choices_seen
+    );
+    println!(
+        "opcodes with no handler reached in {} scripts",
+        report.unregistered.len()
+    );
+    if let Some(path) = report_file {
+        std::fs::write(path, serde_json::to_vec_pretty(&report)?)?;
+        eprintln!("wrote {}", path.display());
+    }
+    if !failed.is_empty() {
+        return Err(format!("{} runs failed", failed.len()).into());
+    }
     Ok(())
 }
 
