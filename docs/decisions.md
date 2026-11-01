@@ -100,3 +100,19 @@ Each entry gives the reason.
   changes to the user interface images. It does not ship the patched
   `script.cpk` or the patched `.bea` files, because they also hold the
   Japanese script and the art of the game.
+
+## The NSP reader and the patch file
+
+- **The `nsp` crate does its own CTR and XTS on top of the `aes` crate,
+  version 0.8.** Reason: `aes` 0.9 needs Rust 1.89, and the project
+  supports Rust 1.88. CTR and XTS are a few lines on a block cipher. A
+  test checks the XTS mode against vector 1 of IEEE 1619.
+- **The NSP is read in place.** The files decrypt when they are read.
+  Reason: a phone has no space for a second copy of 6.4 GB.
+- **The delta is our own code, not bsdiff.** Reason: the `bsdiff` crate
+  did not finish the 706 scripts in 20 minutes. The delta of the
+  importer indexes 16-byte windows of the old file and makes all deltas
+  of the patch in about 1 second.
+- **The patch file holds deltas, not the patched files.** Reason: a delta
+  holds the work of the translators and copies the rest from the files of
+  the user.
