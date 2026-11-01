@@ -122,8 +122,8 @@ The tool is `target/release/dlplayer`.
 The command writes the folder `imported` with a `manifest.json`. A full
 import takes 4 to 5 minutes on 10 cores and writes 6.6 GB.
 
-- `--translation en.dlpatch` applies a patch file from `make-patch`, for
-  example the English patch.
+- `--translation assets/patch/en.dlpatch` applies the English patch. The
+  repository ships it. `make-patch` makes a file of this type.
 - `--patch <dir>` puts the files of a patch folder over the dump.
 - The input can also be a RomFS folder that another tool extracted. A
   folder needs no keys.

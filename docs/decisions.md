@@ -20,6 +20,11 @@ Each entry gives the reason.
 - **The repository holds no game data, no scripts, and no patch files.**
   Reason: the game and the patch belong to their owners. `.gitignore` refuses
   the formats of the game.
+- **One exception: `assets/patch/en.dlpatch`, the English patch as
+  deltas.** The owner chose this on 2026-11-01, with the permission of the
+  translators. The file holds the deltas, not the patched files. It changes
+  only when the translators change the patch. The original patch files
+  stay out of the repository.
 - **The player reads only the data that the user supplies at import time.**
 - **The player does not parse a console format at runtime.** The importer
   converts each file one time into a normalized folder. Reason: the player
