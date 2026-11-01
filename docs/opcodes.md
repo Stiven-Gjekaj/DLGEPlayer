@@ -66,6 +66,48 @@ A handler returns a set of bits:
 A handler that returns 0 sets the program counter itself, for example a
 jump.
 
+## Operands
+
+`FUN_7100074010` resolves the params of an action before the handler
+runs. The top 2 bits of `p0` select the mode:
+
+| `p0` | Meaning |
+|---|---|
+| below `0x40000000` | A data block of the script, local or global. `p1` and `p2` are array indexes. No param of the 706 scripts uses an index. |
+| `0x40000000` to `0x7fffffff` | An integer: the low 30 bits. No param of the scripts uses this mode. |
+| `0x80000000` to `0xbfffffff` | A variable on a stack. No param of the scripts uses this mode. |
+| `0xffffff00` to `0xffffff1f` | Argument `n` of the current call. The argument is a reference to the place that the caller gave. |
+| `0xffffff20` to `0xffffff23` | Integer registers. The scripts use only `0xffffff20`. |
+| `0xffffff24` to `0xffffff27` | Float registers. |
+| `0xffffff28` and up | 64-bit registers. |
+| `0xffffff40`, `0xffffff41`, `0xffffff42` | A data address, a code address, and a value at a code address. |
+
+The listing shows the arguments and the registers as `#n`. The scripts use
+the arguments 0 to 7 and `#0x20`.
+
+## How a chapter runs
+
+Each script is a chapter. The run loop runs a label, for example `sure1`,
+to the return at the top level in one frame. Most handlers queue a
+command for the scene engine with `FUN_71000198d0`. The flag commands are
+also queued. A flag read is immediate. So a run reads the flags from
+before its own commands.
+
+The scene engine plays the commands. Then it runs a label again:
+
+- After `0x44e`, it runs the label that `0x44e` names.
+- After `0x44f`, it runs a label of another script.
+- After `0x700` or `0x4bf`, the chapter is over.
+- Else it runs the same label again.
+
+A label reads the flag `switch` at its start and jumps to a part. At the
+end of each part, the script adds 1 to `switch` and returns. So the next
+run of the label shows the next part. A save holds the state between two
+runs.
+
+`dlplayer run` and the `vm` crate run all 706 chapters in this way. Each
+chapter reaches its end in each run, with each choice.
+
 ## The handler table
 
 `FUN_71000722c0` registers the opcodes from 0. `FUN_7100071490` calls four
@@ -135,8 +177,10 @@ The scripts use only 4 and 5.
 | `0x006` | 25160 | code | Jump to param 0. | `71000715d0` |
 | `0xffffff14` | 99310 | code | Assignment: `param 0 = param 1`. See [Built-in operators](#built-in-operators). | run loop |
 | `0xffffff02` | 2552 | code | Multiplication: `param 0 = param 1 * param 2`. | run loop |
-| `0x44e` | 3731 | data | Param 0 is a label such as `sure2`. Probably a jump to a label. | `710006be30` |
-| `0x44f` | 833 | data | Param 1 is a label such as `sure3`. Probably a jump to a label in another script. | `710006be50` |
+| `0x44e` | 3731 | code | Queue a jump to the label in param 0, for example `sure2`. The jump happens after the run. | `710006be30` |
+| `0x44f` | 833 | code | Queue a jump to a script and a label. Param 0 is the number of the script in `script.bin`, in the same game. Param 1 is the label. The prologues and `start` use it. | `710006be50` |
+| `0x700` | 1361 | data | End the chapter. The handler queues a command. Each chapter ends with it, except the endings. | `7100008c10` |
+| `0x4bf` | 754 | data | End the scene. The endings and the replay of the gallery (`memory_exit`) end with it. | `710006ca60` |
 
 ## Text and input
 
@@ -146,7 +190,6 @@ The scripts use only 4 and 5.
 | `0x4bb` | 110345 | code | Show the message. If the message has text, the handler queues a message command with all the lines and clears the buffer. | `710006c9d0` |
 | `0x4bc` | 75921 | code | Queue a command with the integer in param 0. Values 0 to 267, mostly 0. Probably the speaker. | `710006c9f0` |
 | `0x4be` | 16657 | code | Queue a command with the integer in param 0. Values -120 to 600, mostly 60, 100, 15, and 30. Probably a wait. | `710006ca30` |
-| `0x4bf` | 754 | guess | No params. | `710006ca60` |
 | `0x4dd` | 7958 | guess | Param 0 is 0 or 1. Probably a switch for a text mode. | `710006cbc0` |
 
 ## Audio
@@ -185,12 +228,13 @@ The scripts use only 4 and 5.
 
 | Opcode | Count | Grade | Meaning | Handler |
 |---|---|---|---|---|
-| `0x41b` | 7010 | data | Param 0 is a flag name such as `switch` or `flg_memory`. Param 1 is a value. Probably set a flag. | `710006ba90` |
-| `0x41c` | 1380 | data | Param 0 is a flag name. Probably clear or read a flag. | `710006bae0` |
-| `0x41d` | 4423 | data | Param 0 is a flag name. Param 1 is a global variable. Probably read a flag into the variable. | `710006bb30` |
-| `0x425` | 1409 | data | Param 0 is an ending name such as `rei_Maniac1_end`. Probably record an ending. | `710006bbb0` |
-| `0x427` | 15359 | code | Look up the name in param 0 and write its number into the variable in param 1. The names are ending names such as `aya_ED1_end`. | `710006bc50` |
-| `0x599` | 500 | data | Param 0 is `select`. Param 1 is a choice name. Probably a choice. | `710006ee90` |
+| `0x41b` | 7010 | code | Queue: set the script flag in param 0 to the value in param 1. The script flags are in `flag.bin`. | `710006ba90` |
+| `0x41c` | 1380 | code | Queue: add the value in param 1 to the script flag in param 0. The scripts use it only as `switch`, 1. | `710006bae0` |
+| `0x41d` | 4423 | code | Read the script flag in param 0 into the variable in param 1, at once. | `710006bb30` |
+| `0x425` | 1409 | code | Queue: set the system flag in param 0 to the value in param 1. The system flags are in `flagsys.bin`, for example `rei_Maniac1_end` at the end of a chapter. | `710006bbb0` |
+| `0x427` | 15359 | code | Read the system flag in param 0 into the variable in param 1, at once. | `710006bc50` |
+| `0x599` | 500 | code | Queue a choice. Param 0 is `select`. Param 1 is the name of the choice in `select.bin`. The pick goes to the script flag `select`: 0 for the first option. | `710006ee90` |
+| `0x6fe` | 4 | data | Show the character select. The next part reads the script flag `character` as 1 to 6. `ve_prologue_00` and `mb_prologue_01` use it. | `710000b1c0` |
 
 ## Opcodes that do nothing
 
@@ -204,9 +248,10 @@ nothing: `0x467`, `0x46a`, `0x492`, `0x493`, `0x494`, `0x495`, `0x61a`, and
 registered. No other code writes their slots in the handler table.
 
 For an empty slot, the run loop calls the assertion handler and does not
-move the program counter. The same action then runs again. So the game
-must not reach these actions, or code that we have not found fills the
-slots at run time. This is not verified.
+move the program counter. The same action then runs again. But the runs
+of the `vm` crate reach these actions in 167 scripts, in the main story.
+So code that we have not found must fill the slots at run time. The `vm`
+crate gives these actions to the host and goes on.
 
 `0x69a` comes before `0x69b`. In `mb_aya_Dark_09`, two `0x69a` actions with
 the params `0, 514, 283, 38004` and `1, 388, 202, 38005` come before one
@@ -239,8 +284,6 @@ The meaning is not known yet.
 | `0x6b2` | 192 | none | `FUN_710000a490` |
 | `0x6c2` | 15 | int | `FUN_710000a530` |
 | `0x6c3` | 15 | none | `FUN_710000a5b0` |
-| `0x6fe` | 4 | none | `FUN_710000b1c0` |
-| `0x700` | 1361 | none | `FUN_7100008c10` |
 
 `0x5a7` and `0x5a8` call the same function with 1 and 0. They are a pair
 that turns one thing on and off.
