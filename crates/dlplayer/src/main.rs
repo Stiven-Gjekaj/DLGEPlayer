@@ -33,10 +33,18 @@ enum Command {
         /// patches. The first patch has priority.
         #[arg(long)]
         patch: Vec<PathBuf>,
-        /// The Vorbis quality, from -0.2 to 1.0.
-        #[arg(long, default_value_t = 0.4)]
-        quality: f32,
-        /// Convert only these audio groups: bgm, se, loopse, voice.
+        /// The Vorbis quality, from -0.2 to 1.0. The default is 0.4, or 0
+        /// with --mobile.
+        #[arg(long)]
+        quality: Option<f32>,
+        /// Write the images as lossy WebP with this quality, from 0 to 100.
+        #[arg(long)]
+        webp: Option<f32>,
+        /// Use the settings for a phone: WebP images at quality 90 and
+        /// Vorbis quality 0. The folder is about half the size.
+        #[arg(long)]
+        mobile: bool,
+        /// Convert only these audio groups: bgm, se, loopse, voice, system.
         #[arg(long, value_delimiter = ',')]
         audio: Vec<String>,
         /// The number of threads. All CPU cores without this option.
@@ -128,20 +136,33 @@ fn main() -> ExitCode {
             translation,
             patch,
             quality,
+            webp,
+            mobile,
             audio,
             jobs,
-        } => import(
-            &input,
-            &out,
-            keys.as_deref(),
-            translation.as_deref(),
-            patch,
-            importer::import::Options {
-                quality,
-                audio_groups: audio,
-                jobs,
-            },
-        ),
+        } => {
+            let mut options = if mobile {
+                importer::import::Options::mobile()
+            } else {
+                importer::import::Options::default()
+            };
+            if let Some(q) = quality {
+                options.quality = q;
+            }
+            if let Some(q) = webp {
+                options.images = importer::image::Format::Webp(q);
+            }
+            options.audio_groups = audio;
+            options.jobs = jobs;
+            import(
+                &input,
+                &out,
+                keys.as_deref(),
+                translation.as_deref(),
+                patch,
+                options,
+            )
+        }
         Command::MakePatch {
             input,
             patched,
