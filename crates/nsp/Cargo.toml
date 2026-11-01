@@ -9,3 +9,7 @@ repository.workspace = true
 
 [dependencies]
 aes = "0.8.4"
+
+[features]
+# Gives `romfs::build` to the tests of other crates.
+build = []

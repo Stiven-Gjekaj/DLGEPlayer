@@ -23,9 +23,9 @@
 
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read, Seek};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
 use serde::Serialize;
@@ -78,43 +78,97 @@ impl Default for Options {
     }
 }
 
+/// A RomFS: a directory, or the RomFS of an NSP file.
+pub enum Root {
+    Dir(PathBuf),
+    RomFs(Arc<nsp::RomFs>),
+}
+
+/// A file that the importer reads in parts.
+pub trait ReadSeek: Read + Seek + Send {}
+impl<T: Read + Seek + Send> ReadSeek for T {}
+
 /// A list of RomFS roots. The first root that holds a path gives the file.
-#[derive(Debug, Clone)]
 pub struct Source {
-    pub roots: Vec<PathBuf>,
+    pub roots: Vec<Root>,
 }
 
 impl Source {
-    /// Gives the file for a path in the RomFS.
-    pub fn resolve(&self, path: &str) -> Option<PathBuf> {
-        self.roots
-            .iter()
-            .map(|r| r.join(path))
-            .find(|p| p.is_file())
+    /// Tells if a path is a file in a root.
+    pub fn contains(&self, path: &str) -> bool {
+        self.roots.iter().any(|root| match root {
+            Root::Dir(dir) => dir.join(path).is_file(),
+            Root::RomFs(fs) => fs.file(path).is_some(),
+        })
     }
 
     /// Gives the names of the files in a directory of all roots.
     pub fn list(&self, dir: &str) -> Result<Vec<String>> {
         let mut names = std::collections::BTreeSet::new();
         for root in &self.roots {
-            let Ok(entries) = std::fs::read_dir(root.join(dir)) else {
-                continue;
-            };
-            for entry in entries {
-                let entry = entry?;
-                if entry.file_type()?.is_file() {
-                    names.insert(entry.file_name().to_string_lossy().into_owned());
+            match root {
+                Root::Dir(base) => {
+                    let Ok(entries) = std::fs::read_dir(base.join(dir)) else {
+                        continue;
+                    };
+                    for entry in entries {
+                        let entry = entry?;
+                        if entry.file_type()?.is_file() {
+                            names.insert(entry.file_name().to_string_lossy().into_owned());
+                        }
+                    }
                 }
+                Root::RomFs(fs) => names.extend(fs.list(dir).into_iter().map(str::to_string)),
             }
         }
         Ok(names.into_iter().collect())
     }
 
-    fn read(&self, path: &str) -> Result<Vec<u8>> {
-        let file = self
-            .resolve(path)
-            .ok_or_else(|| format!("{path} is not in the dump"))?;
-        Ok(std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?)
+    /// Opens a file to read it in parts.
+    pub fn open(&self, path: &str) -> Result<Option<Box<dyn ReadSeek>>> {
+        for root in &self.roots {
+            match root {
+                Root::Dir(dir) => {
+                    let file = dir.join(path);
+                    if file.is_file() {
+                        let f =
+                            File::open(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+                        return Ok(Some(Box::new(BufReader::new(f))));
+                    }
+                }
+                Root::RomFs(fs) => {
+                    if let Some(region) = fs.file(path) {
+                        return Ok(Some(Box::new(BufReader::with_capacity(
+                            1 << 20,
+                            region.reader(),
+                        ))));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Reads a whole file.
+    pub fn read(&self, path: &str) -> Result<Vec<u8>> {
+        for root in &self.roots {
+            match root {
+                Root::Dir(dir) => {
+                    let file = dir.join(path);
+                    if file.is_file() {
+                        return Ok(
+                            std::fs::read(&file).map_err(|e| format!("{}: {e}", file.display()))?
+                        );
+                    }
+                }
+                Root::RomFs(fs) => {
+                    if let Some(region) = fs.file(path) {
+                        return Ok(region.read_all().map_err(|e| format!("{path}: {e}"))?);
+                    }
+                }
+            }
+        }
+        Err(format!("{path} is not in the dump").into())
     }
 }
 
@@ -362,12 +416,11 @@ pub fn table_json(table: &bea::table::Table) -> serde_json::Value {
     serde_json::json!({ "columns": table.columns, "rows": rows })
 }
 
-fn open_cpk(source: &Source, name: &str) -> Result<Option<cpk::Archive<BufReader<File>>>> {
-    let Some(path) = source.resolve(name) else {
+fn open_cpk(source: &Source, name: &str) -> Result<Option<cpk::Archive<Box<dyn ReadSeek>>>> {
+    let Some(file) = source.open(name)? else {
         return Ok(None);
     };
-    let file = File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    Ok(Some(cpk::Archive::open(BufReader::new(file))?))
+    Ok(Some(cpk::Archive::open(file)?))
 }
 
 type Fail<'a> = dyn Fn(&str, BoxError) + Sync + 'a;
@@ -738,9 +791,18 @@ fn import_movies(
             continue;
         }
         let file = format!("movies/{name}");
-        let result = source
-            .read(&format!("movie/{name}"))
-            .and_then(|data| write(out, &file, &data));
+        let result = (|| -> Result<()> {
+            let mut input = source
+                .open(&format!("movie/{name}"))?
+                .ok_or("the movie is not in the dump")?;
+            let path = out.join(&file);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let mut output = File::create(&path)?;
+            std::io::copy(&mut input, &mut output)?;
+            Ok(())
+        })();
         match result {
             Ok(()) => {
                 manifest
@@ -806,13 +868,33 @@ mod tests {
                     .unwrap();
             }
         }
+        let romfs = nsp::romfs::build(&[("dir/c.txt", b"from the nsp"), ("dir/a.txt", b"hidden")]);
+        let len = romfs.len() as u64;
+        let fs = nsp::RomFs::read(nsp::Region::new(Arc::new(romfs), 0, len)).unwrap();
         let source = Source {
-            roots: vec![patch.clone(), dump.clone()],
+            roots: vec![
+                Root::Dir(patch.clone()),
+                Root::Dir(dump.clone()),
+                Root::RomFs(Arc::new(fs)),
+            ],
         };
-        assert_eq!(source.resolve("dir/a.txt"), Some(patch.join("dir/a.txt")));
-        assert_eq!(source.resolve("dir/b.txt"), Some(dump.join("dir/b.txt")));
-        assert_eq!(source.resolve("dir/c.txt"), None);
-        assert_eq!(source.list("dir").unwrap(), vec!["a.txt", "b.txt"]);
+        let text = |p: &str| String::from_utf8(source.read(p).unwrap()).unwrap();
+        assert_eq!(text("dir/a.txt"), patch.to_string_lossy());
+        assert_eq!(text("dir/b.txt"), dump.to_string_lossy());
+        assert_eq!(text("dir/c.txt"), "from the nsp");
+        let mut opened = String::new();
+        source
+            .open("dir/c.txt")
+            .unwrap()
+            .unwrap()
+            .read_to_string(&mut opened)
+            .unwrap();
+        assert_eq!(opened, "from the nsp");
+        assert!(source.contains("dir/c.txt"));
+        assert!(!source.contains("dir/d.txt"));
+        assert!(source.read("dir/d.txt").is_err());
+        assert!(source.open("dir/d.txt").unwrap().is_none());
+        assert_eq!(source.list("dir").unwrap(), vec!["a.txt", "b.txt", "c.txt"]);
         assert!(source.list("none").unwrap().is_empty());
         std::fs::remove_dir_all(&base).unwrap();
     }

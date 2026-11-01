@@ -274,6 +274,7 @@ dependencies = [
  "clap",
  "cpk",
  "importer",
+ "nsp",
  "sarc",
  "stcm2l",
 ]
@@ -365,6 +366,7 @@ dependencies = [
  "cpk",
  "cridecoder",
  "lyt",
+ "nsp",
  "png",
  "rayon",
  "sarc",

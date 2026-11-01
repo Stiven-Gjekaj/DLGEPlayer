@@ -150,8 +150,9 @@ impl RomFs {
     }
 }
 
-/// Builds a RomFS with the given files. Each path uses `/`. The tests use it.
-#[cfg(test)]
+/// Builds a RomFS with the given files. Each path uses `/`. The tests of
+/// this crate and of other crates use it, with the feature `build`.
+#[cfg(any(test, feature = "build"))]
 pub fn build(files: &[(&str, &[u8])]) -> Vec<u8> {
     // The directories, by path. The root is "".
     let mut dir_paths: Vec<String> = vec![String::new()];
