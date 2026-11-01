@@ -32,10 +32,10 @@ _Haunted Dark Bridal and MORE,BLOOD, on your computer and your phone, from your 
 ---
 
 > [!NOTE]
-> **Phases 1 to 4 of 8 are done. The player does not run the game yet.**
-> `dlplayer import` converts a dump into the folder that the player reads:
-> all 706 scripts as IR, all images and sprites as PNG, all audio as Ogg
-> Vorbis, the layouts as JSON, and the movies.
+> **Phases 1 to 5 of 8 are done. The player does not show the game yet.**
+> `dlplayer import` converts your NSP into the folder that the player
+> reads. `dlplayer run` runs all 706 chapters of both games with no screen:
+> each chapter reaches its end with each choice.
 > [docs/roadmap.md](docs/roadmap.md) gives the next phases.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes.
 
@@ -83,10 +83,13 @@ Done:
 - Import an NSP with your keys into a normalized folder with one command
 - Apply the English patch as a file of deltas
 
+- Import for a phone with `--mobile`, and continue an import that stopped
+- Run the scripts with no screen: flags, choices, jumps, saves, and a
+  coverage report
+
 Planned:
 
-- The VM that runs the IR ([phase 5](docs/roadmap.md))
-- The Godot player
+- The Godot player ([phase 6](docs/roadmap.md))
 - Builds for Windows, macOS, Linux, Android, and iOS
 - The English text in the player
 
@@ -132,6 +135,11 @@ import takes 4 to 5 minutes on 10 cores and writes 6.6 GB.
   0.4.
 - `--audio bgm,se` converts only these audio groups: `bgm`, `se`,
   `loopse`, `voice`, and `system`.
+- `--mobile` writes WebP images and smaller audio. The folder is 3.3 GB
+  instead of 6.6 GB. `--webp <q>` sets only the image quality.
+
+If the import stops, run the same command again. It continues where it
+stopped.
 
 [docs/formats.md](docs/formats.md#the-import-folder) describes the folder.
 
@@ -152,6 +160,7 @@ import takes 4 to 5 minutes on 10 cores and writes 6.6 GB.
 | `dlplayer sprite romfs/Archive 01_aya_01_A emi aya.png` | Writes a sprite with an expression as a PNG image |
 | `dlplayer layout romfs/Archive/title.nxonnx32.bea title` | Writes the files of the layouts and their textures |
 | `dlplayer audio BGM01.hca BGM01.ogg` | Converts an HCA file to Ogg Vorbis |
+| `dlplayer run imported --report report.json` | Runs all chapters with no screen and reports the coverage |
 
 ## Crates
 
@@ -165,7 +174,7 @@ import takes 4 to 5 minutes on 10 cores and writes 6.6 GB.
 | `lyt` | Reads NintendoWare `.bflyt` layouts and `.bflan` animations |
 | `nsp` | Reads the RomFS of an NSP file with the keys of the user |
 | `importer` | Converts a dump into a normalized folder: the script IR, the images, the sprites, the audio, and the layouts |
-| `vm` | Runs the script bytecode. Empty. |
+| `vm` | Runs the script IR with no screen: the flags, the choices, the jumps, and the saves |
 | `player` | The Godot 4 extension. Empty. |
 | `dlplayer` | The command line tool |
 
@@ -180,6 +189,7 @@ game. The corpus tests read a real dump only if you set these variables:
 - `DLGE_ARCHIVES`: the `Archive` directory of the RomFS
 - `DLGE_NSP`, `DLGE_KEYS`, and `DLGE_ROMFS`: the NSP, the keys, and an
   extracted RomFS to compare with
+- `DLGE_IMPORT`: a folder that `dlplayer import` wrote
 
 ```
 DLGE_SCRIPTS=scripts DLGE_ARCHIVES=romfs/Archive cargo test --workspace --release

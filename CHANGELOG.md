@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- The `vm` crate runs the script IR with no screen. It queues the commands
+  of each run, plays the flag writes in order, asks the host at each
+  choice, and follows the label and script jumps. A save holds the state
+  between two runs.
+- `dlplayer run` runs all chapters. With the JP scripts and with the EN
+  scripts, all 706 chapters reach their end with each choice, and all 98
+  routes run to the end. The runs reach all 500 choices. They reach
+  134,455 of the 134,503 reachable JP text lines and 137,472 of the
+  137,520 reachable EN text lines.
+- `docs/opcodes.md` gives the operand modes, the flags, the jumps, the
+  choice, and the ends of a chapter.
+- `dlplayer import --mobile` writes WebP images and Vorbis at quality 0.
+  The folder is 3.3 GB instead of 6.6 GB.
+- The import keeps a journal and continues after a stop.
 - The `nsp` crate reads the RomFS of an NSP with the keys of the user. All
   2125 files agree with hactool, byte for byte.
 - `dlplayer import` takes an NSP and `--keys`. The import from the NSP
