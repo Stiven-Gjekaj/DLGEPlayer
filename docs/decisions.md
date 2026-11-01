@@ -121,3 +121,38 @@ Each entry gives the reason.
 - **The patch file holds deltas, not the patched files.** Reason: a delta
   holds the work of the translators and copies the rest from the files of
   the user.
+
+## The VM
+
+- **The VM queues the commands of a run, as the game does.** The flag
+  writes take effect when the session plays the commands. The flag reads
+  are immediate. Reason: the handlers of the game queue the flag writes,
+  and a run reads the flags from before its own writes.
+- **After a run with no jump and no end, the session runs the same label
+  again.** Reason: each part of a chapter adds 1 to `switch` and returns.
+  The game must run the label again to show the next part.
+- **The VM gives the opcodes with no handler to the host and goes on.**
+  Reason: the main story reaches them in 167 scripts, so the game must
+  handle them in a way that we have not found.
+- **`0x4bf` ends a chapter, as `0x700` does.** Reason: the endings end with
+  `0x4bf` and have no `0x700` after it.
+- **The runner sets `character` for a single chapter.** Reason: the
+  chapters after the character select read the pick of an earlier chapter.
+  A route carries all flags from one chapter to the next.
+- **The finished-game run sets only the flags that end in `_end` or
+  `_open`.** Reason: the other system flags are settings and debug
+  switches. With all flags set, `start` takes a debug jump to a label that
+  does not exist.
+- **A save is the state between two runs:** the script, the label, the
+  flags, the globals, and the registers. Reason: the game saves at the same
+  point, and the state of a run in progress is not needed.
+
+## The import on a phone
+
+- **`--mobile` writes WebP images at quality 90 and Vorbis at quality 0.**
+  Reason: the folder is 3.3 GB instead of 6.6 GB. The images come from
+  BC7, which is lossy already, so WebP at quality 90 loses little.
+- **The import keeps a journal and continues after a stop.** Reason: a
+  phone can close the app during an import of several minutes. The journal
+  gets one line after each item is written, so a half-written file is
+  converted again.
