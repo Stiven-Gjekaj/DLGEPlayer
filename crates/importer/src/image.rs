@@ -1,4 +1,4 @@
-//! Reads `RAW_` images and writes RGBA pixels as PNG images.
+//! Reads `RAW_` images and writes RGBA pixels as PNG or WebP images.
 //!
 //! A `RAW_` file has the magic `RAW_`, the width and the height as
 //! little-endian u16, and then RGBA pixels, 4 bytes for each pixel, row by
@@ -26,6 +26,83 @@ pub fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, png::
     encoder.set_depth(png::BitDepth::Eight);
     encoder.write_header()?.write_image_data(rgba)?;
     Ok(out)
+}
+
+/// The format of the images that the import writes.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Format {
+    Png,
+    /// Lossy WebP with a quality from 0 to 100.
+    Webp(f32),
+}
+
+impl Format {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Format::Png => "png",
+            Format::Webp(_) => "webp",
+        }
+    }
+
+    /// Encodes RGBA pixels in this format.
+    pub fn encode(
+        self,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+        match self {
+            Format::Png => Ok(encode_png(width, height, rgba)?),
+            Format::Webp(quality) => Ok(encode_webp(width, height, rgba, quality)?),
+        }
+    }
+}
+
+/// An error from the WebP encoder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebpError(pub &'static str);
+
+impl std::fmt::Display for WebpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WebP: {}", self.0)
+    }
+}
+
+impl std::error::Error for WebpError {}
+
+/// Encodes RGBA pixels as a lossy WebP file with libwebp.
+pub fn encode_webp(
+    width: u32,
+    height: u32,
+    rgba: &[u8],
+    quality: f32,
+) -> Result<Vec<u8>, WebpError> {
+    if rgba.len() != width as usize * height as usize * 4 {
+        return Err(WebpError("the pixel data has the wrong size"));
+    }
+    if width == 0 || height == 0 || width > 16383 || height > 16383 {
+        return Err(WebpError("the size is outside 1 to 16383"));
+    }
+    let mut out: *mut u8 = std::ptr::null_mut();
+    // SAFETY: `rgba` holds `width * height * 4` bytes, which the check
+    // above makes sure of. libwebp writes a new buffer to `out`, and
+    // `WebPFree` releases it after the copy.
+    unsafe {
+        let len = libwebp_sys::WebPEncodeRGBA(
+            rgba.as_ptr(),
+            width as i32,
+            height as i32,
+            width as i32 * 4,
+            quality,
+            &mut out,
+        );
+        if len == 0 || out.is_null() {
+            return Err(WebpError("the encoder failed"));
+        }
+        let data = std::slice::from_raw_parts(out, len).to_vec();
+        libwebp_sys::WebPFree(out.cast());
+        Ok(data)
+    }
 }
 
 #[cfg(test)]
@@ -61,7 +138,23 @@ mod tests {
     }
 
     #[test]
+    fn encodes_webp() {
+        let rgba: Vec<u8> = (0..64 * 32 * 4).map(|i| (i % 251) as u8).collect();
+        let webp = encode_webp(64, 32, &rgba, 90.0).unwrap();
+        let decoder = image_webp::WebPDecoder::new(std::io::Cursor::new(&webp)).unwrap();
+        assert_eq!(decoder.dimensions(), (64, 32));
+        assert!(decoder.has_alpha());
+        assert_eq!(Format::Webp(90.0).extension(), "webp");
+        assert_eq!(
+            Format::Png.encode(64, 32, &rgba).unwrap()[..4],
+            [0x89, b'P', b'N', b'G']
+        );
+    }
+
+    #[test]
     fn refuses_the_wrong_size() {
         assert!(encode_png(2, 2, &[0; 4]).is_err());
+        assert!(encode_webp(2, 2, &[0; 4], 90.0).is_err());
+        assert!(encode_webp(0, 0, &[], 90.0).is_err());
     }
 }

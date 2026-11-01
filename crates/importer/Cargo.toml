@@ -12,6 +12,7 @@ bea.workspace = true
 bntx.workspace = true
 cpk.workspace = true
 cridecoder = "0.3.7"
+libwebp-sys = { version = "0.14.4", default-features = false, features = ["std"] }
 lyt.workspace = true
 nsp.workspace = true
 png = "0.18.1"
@@ -23,4 +24,5 @@ stcm2l = { workspace = true, features = ["serde"] }
 vorbis_rs = { version = "0.5.6", default-features = false }
 
 [dev-dependencies]
+image-webp = "0.2.4"
 nsp = { workspace = true, features = ["build"] }
