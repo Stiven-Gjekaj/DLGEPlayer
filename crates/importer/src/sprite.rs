@@ -20,7 +20,7 @@
 
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 const GROUPS: usize = 13;
 const GROUP_LEN: usize = 13;
@@ -46,14 +46,14 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 /// A position or a size in pixels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Point {
     pub x: u32,
     pub y: u32,
 }
 
 /// One expression: the frames of the eyes and of the mouth.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Expression {
     pub name: String,
     pub eyes: [Point; 3],
@@ -61,7 +61,7 @@ pub struct Expression {
 }
 
 /// The layout of one sprite sheet.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Sprite {
     pub name: String,
     pub sheet: Point,
