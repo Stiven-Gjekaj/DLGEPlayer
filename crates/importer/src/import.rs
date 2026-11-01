@@ -11,7 +11,7 @@
 //! | `manifest.json` | the list of all files, with their data |
 //! | `scripts/<name>.json` | the IR of each script |
 //! | `tables/<name>.json` | each `BIN_` table of `Archive/static~*.bin` |
-//! | `images/<group>/<name>.png` | each standalone texture |
+//! | `images/<group>/<name>.png` | each standalone texture, or `.webp` |
 //! | `sprites/<name>.png` | each character sprite sheet |
 //! | `ui/<archive>/<name>.png` | each texture of a UI layout archive |
 //! | `ui/<archive>/layouts/<name>.json` | each `.bflyt` layout |
@@ -67,6 +67,20 @@ pub struct Options {
     pub audio_groups: Vec<String>,
     /// The number of threads. All CPU cores if `None`.
     pub jobs: Option<usize>,
+    /// The format of the images.
+    pub images: image::Format,
+}
+
+impl Options {
+    /// The settings for a phone: lossy WebP images at quality 90 and Vorbis
+    /// quality 0. The folder is about half the size.
+    pub fn mobile() -> Options {
+        Options {
+            quality: 0.0,
+            images: image::Format::Webp(90.0),
+            ..Options::default()
+        }
+    }
 }
 
 impl Default for Options {
@@ -75,6 +89,7 @@ impl Default for Options {
             quality: 0.4,
             audio_groups: Vec::new(),
             jobs: None,
+            images: image::Format::Png,
         }
     }
 }
@@ -288,7 +303,7 @@ fn run_in_pool(
         manifest.lock().unwrap().tables.len()
     ));
 
-    import_images(source, out, &archives, &manifest, &fail);
+    import_images(source, out, &archives, options.images, &manifest, &fail);
     let images: usize = manifest
         .lock()
         .unwrap()
@@ -298,13 +313,13 @@ fn run_in_pool(
         .sum();
     progress(&format!("images: {images}"));
 
-    import_sprites(source, out, &manifest, &fail);
+    import_sprites(source, out, options.images, &manifest, &fail);
     progress(&format!(
         "sprites: {}",
         manifest.lock().unwrap().sprites.len()
     ));
 
-    import_ui(source, out, &archives, &manifest, &fail);
+    import_ui(source, out, &archives, options.images, &manifest, &fail);
     let (textures, layouts, animations) =
         manifest
             .lock()
@@ -508,6 +523,7 @@ fn import_images(
     source: &Source,
     out: &Path,
     archives: &[String],
+    format: image::Format,
     manifest: &Mutex<Manifest>,
     fail: &Fail,
 ) {
@@ -518,14 +534,14 @@ fn import_images(
         let result = (|| -> Result<String> {
             let data = read_archive_first(source, archive)?;
             let png = match image::decode_raw(&data) {
-                Some((width, height, rgba)) => image::encode_png(width, height, rgba)?,
+                Some((width, height, rgba)) => format.encode(width, height, rgba)?,
                 None => {
                     let textures = bntx::parse(&data)?;
                     let texture = textures.first().ok_or("the file holds no texture")?;
-                    image::encode_png(texture.width, texture.height, &texture.to_rgba8()?)?
+                    format.encode(texture.width, texture.height, &texture.to_rgba8()?)?
                 }
             };
-            let file = format!("images/{group}/{name}.png");
+            let file = format!("images/{group}/{name}.{}", format.extension());
             write(out, &file, &png)?;
             Ok(file)
         })();
@@ -544,7 +560,13 @@ fn import_images(
     });
 }
 
-fn import_sprites(source: &Source, out: &Path, manifest: &Mutex<Manifest>, fail: &Fail) {
+fn import_sprites(
+    source: &Source,
+    out: &Path,
+    format: image::Format,
+    manifest: &Mutex<Manifest>,
+    fail: &Fail,
+) {
     let rows = match read_archive_first(source, &format!("static~chara.bin{ARCHIVE_SUFFIX}"))
         .and_then(|data| Ok(bea::table::Table::parse(&data)?))
     {
@@ -567,8 +589,8 @@ fn import_sprites(source: &Source, out: &Path, manifest: &Mutex<Manifest>, fail:
                 )
                 .into());
             }
-            let file = format!("sprites/{}.png", layout.name);
-            let png = image::encode_png(texture.width, texture.height, &texture.to_rgba8()?)?;
+            let file = format!("sprites/{}.{}", layout.name, format.extension());
+            let png = format.encode(texture.width, texture.height, &texture.to_rgba8()?)?;
             write(out, &file, &png)?;
             Ok(SpriteEntry { file, layout })
         })();
@@ -590,6 +612,7 @@ fn import_ui(
     source: &Source,
     out: &Path,
     archives: &[String],
+    format: image::Format,
     manifest: &Mutex<Manifest>,
     fail: &Fail,
 ) {
@@ -611,11 +634,11 @@ fn import_ui(
                     let name = stem(&f.name).to_string();
                     if f.data.starts_with(b"BNTX") {
                         for t in bntx::parse(f.data)? {
-                            let file = format!("ui/{layout}/{}.png", t.name);
+                            let file = format!("ui/{layout}/{}.{}", t.name, format.extension());
                             write(
                                 out,
                                 &file,
-                                &image::encode_png(t.width, t.height, &t.to_rgba8()?)?,
+                                &format.encode(t.width, t.height, &t.to_rgba8()?)?,
                             )?;
                             files.textures.insert(t.name.clone(), file);
                         }
