@@ -16,12 +16,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Convert a RomFS dump into the folder that the player reads.
+    /// Convert a dump into the folder that the player reads.
     Import {
-        /// The RomFS folder of the dump.
-        romfs: PathBuf,
+        /// The NSP file of the game, or a RomFS folder.
+        input: PathBuf,
         /// The output folder.
         out: PathBuf,
+        /// The prod.keys file of your console. An NSP file needs it.
+        #[arg(long)]
+        keys: Option<PathBuf>,
         /// A RomFS folder whose files replace the files of the dump, for
         /// example the English patch. Give it more than one time for more
         /// patches. The first patch has priority.
@@ -104,13 +107,14 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::Import {
-            romfs,
+            input,
             out,
+            keys,
             patch,
             quality,
             audio,
             jobs,
-        } => import(romfs, &out, patch, quality, audio, jobs),
+        } => import(&input, &out, keys.as_deref(), patch, quality, audio, jobs),
         Command::Cpk { command } => match command {
             CpkCommand::List { archive } => cpk_list(&archive),
             CpkCommand::Extract { archive, out } => cpk_extract(&archive, &out),
@@ -336,14 +340,34 @@ fn sprite(archives: &Path, name: &str, expression: Option<&str>, out: Option<&Pa
 }
 
 fn import(
-    romfs: PathBuf,
+    input: &Path,
     out: &Path,
-    mut roots: Vec<PathBuf>,
+    keys: Option<&Path>,
+    patches: Vec<PathBuf>,
     quality: f32,
     audio_groups: Vec<String>,
     jobs: Option<usize>,
 ) -> Result<()> {
-    roots.push(romfs);
+    use importer::import::Root;
+    let mut roots: Vec<Root> = patches.into_iter().map(Root::Dir).collect();
+    if input.is_dir() {
+        roots.push(Root::Dir(input.to_path_buf()));
+    } else {
+        let keys =
+            keys.ok_or("an NSP file needs --keys with the prod.keys file of your console")?;
+        let keys = nsp::Keys::parse(
+            &std::fs::read_to_string(keys).map_err(|e| format!("{}: {e}", keys.display()))?,
+        );
+        let file = std::fs::File::open(input).map_err(|e| format!("{}: {e}", input.display()))?;
+        let game = nsp::Game::open(std::sync::Arc::new(file), &keys)
+            .map_err(|e| format!("{}: {e}", input.display()))?;
+        eprintln!(
+            "program {:016x}, {} files",
+            game.program_id,
+            game.romfs.files().count()
+        );
+        roots.push(Root::RomFs(std::sync::Arc::new(game.romfs)));
+    }
     let source = importer::import::Source { roots };
     let options = importer::import::Options {
         quality,
