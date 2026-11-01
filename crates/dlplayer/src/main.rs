@@ -25,6 +25,9 @@ enum Command {
         /// The prod.keys file of your console. An NSP file needs it.
         #[arg(long)]
         keys: Option<PathBuf>,
+        /// A patch file from `make-patch`, for example the English patch.
+        #[arg(long)]
+        translation: Option<PathBuf>,
         /// A RomFS folder whose files replace the files of the dump, for
         /// example the English patch. Give it more than one time for more
         /// patches. The first patch has priority.
@@ -65,6 +68,18 @@ enum Command {
     Table { file: PathBuf },
     /// Write the files of each layout in a .bea file, and its textures as PNG.
     Layout { file: PathBuf, out: PathBuf },
+    /// Make a patch file with the deltas from a dump to a patched RomFS.
+    MakePatch {
+        /// The NSP file of the game, or a RomFS folder.
+        input: PathBuf,
+        /// The RomFS folder of the patch, with only the changed files.
+        patched: PathBuf,
+        /// The patch file to write.
+        out: PathBuf,
+        /// The prod.keys file of your console. An NSP file needs it.
+        #[arg(long)]
+        keys: Option<PathBuf>,
+    },
     /// Convert an HCA audio file to Ogg Vorbis.
     Audio {
         file: PathBuf,
@@ -110,11 +125,29 @@ fn main() -> ExitCode {
             input,
             out,
             keys,
+            translation,
             patch,
             quality,
             audio,
             jobs,
-        } => import(&input, &out, keys.as_deref(), patch, quality, audio, jobs),
+        } => import(
+            &input,
+            &out,
+            keys.as_deref(),
+            translation.as_deref(),
+            patch,
+            importer::import::Options {
+                quality,
+                audio_groups: audio,
+                jobs,
+            },
+        ),
+        Command::MakePatch {
+            input,
+            patched,
+            out,
+            keys,
+        } => make_patch(&input, &patched, &out, keys.as_deref()),
         Command::Cpk { command } => match command {
             CpkCommand::List { archive } => cpk_list(&archive),
             CpkCommand::Extract { archive, out } => cpk_extract(&archive, &out),
@@ -339,41 +372,43 @@ fn sprite(archives: &Path, name: &str, expression: Option<&str>, out: Option<&Pa
     Ok(())
 }
 
+/// Gives the RomFS of an NSP file, or the folder as it is.
+fn open_input(input: &Path, keys: Option<&Path>) -> Result<importer::import::Root> {
+    use importer::import::Root;
+    if input.is_dir() {
+        return Ok(Root::Dir(input.to_path_buf()));
+    }
+    let keys = keys.ok_or("an NSP file needs --keys with the prod.keys file of your console")?;
+    let keys = nsp::Keys::parse(
+        &std::fs::read_to_string(keys).map_err(|e| format!("{}: {e}", keys.display()))?,
+    );
+    let file = std::fs::File::open(input).map_err(|e| format!("{}: {e}", input.display()))?;
+    let game = nsp::Game::open(std::sync::Arc::new(file), &keys)
+        .map_err(|e| format!("{}: {e}", input.display()))?;
+    eprintln!(
+        "program {:016x}, {} files",
+        game.program_id,
+        game.romfs.files().count()
+    );
+    Ok(Root::RomFs(std::sync::Arc::new(game.romfs)))
+}
+
 fn import(
     input: &Path,
     out: &Path,
     keys: Option<&Path>,
+    translation: Option<&Path>,
     patches: Vec<PathBuf>,
-    quality: f32,
-    audio_groups: Vec<String>,
-    jobs: Option<usize>,
+    options: importer::import::Options,
 ) -> Result<()> {
     use importer::import::Root;
     let mut roots: Vec<Root> = patches.into_iter().map(Root::Dir).collect();
-    if input.is_dir() {
-        roots.push(Root::Dir(input.to_path_buf()));
-    } else {
-        let keys =
-            keys.ok_or("an NSP file needs --keys with the prod.keys file of your console")?;
-        let keys = nsp::Keys::parse(
-            &std::fs::read_to_string(keys).map_err(|e| format!("{}: {e}", keys.display()))?,
-        );
-        let file = std::fs::File::open(input).map_err(|e| format!("{}: {e}", input.display()))?;
-        let game = nsp::Game::open(std::sync::Arc::new(file), &keys)
-            .map_err(|e| format!("{}: {e}", input.display()))?;
-        eprintln!(
-            "program {:016x}, {} files",
-            game.program_id,
-            game.romfs.files().count()
-        );
-        roots.push(Root::RomFs(std::sync::Arc::new(game.romfs)));
-    }
-    let source = importer::import::Source { roots };
-    let options = importer::import::Options {
-        quality,
-        audio_groups,
-        jobs,
+    roots.push(open_input(input, keys)?);
+    let translation = match translation {
+        Some(path) => Some(importer::patch::PatchSet::parse(&read_file(path)?)?),
+        None => None,
     };
+    let source = importer::import::Source { roots, translation };
     let start = std::time::Instant::now();
     let manifest = importer::import::run(&source, out, &options, &|line| {
         eprintln!("[{:>6.1}s] {line}", start.elapsed().as_secs_f32())
@@ -386,6 +421,23 @@ fn import(
         return Err(format!("{} files did not convert", manifest.failures.len()).into());
     }
     eprintln!("wrote {}", out.join("manifest.json").display());
+    Ok(())
+}
+
+fn make_patch(input: &Path, patched: &Path, out: &Path, keys: Option<&Path>) -> Result<()> {
+    let source = importer::import::Source {
+        roots: vec![open_input(input, keys)?],
+        translation: None,
+    };
+    let set = importer::patch::make(&source, patched).map_err(|e| e.to_string())?;
+    let bytes = set.to_bytes();
+    std::fs::write(out, &bytes)?;
+    eprintln!(
+        "wrote {} deltas, {} bytes, to {}",
+        set.deltas.len(),
+        bytes.len(),
+        out.display()
+    );
     Ok(())
 }
 
