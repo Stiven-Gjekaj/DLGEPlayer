@@ -24,6 +24,61 @@ Names in `Archive/` use `~` for `/`. For example,
 `texture~bg~bg01b.dds.nxonnx32.bea` holds the texture `texture/bg/bg01b.dds`.
 The script prefix `mb_` is MORE,BLOOD. The prefix `ve_` is Haunted Dark Bridal.
 
+## NSP files
+
+The `nsp` crate reads the RomFS straight from the NSP file with the keys
+of the user. It needs `header_key` and `key_area_key_application_XX` from
+`prod.keys`. A dump with a ticket also needs `titlekek_XX`.
+
+- The NSP is a PFS0 package: `PFS0`, the file count, the size of the
+  string table, then 0x18-byte entries (offset, size, name offset).
+- The game NSP holds 4 NCA files. The program NCA (content type 0) is
+  6.4 GB. This dump has no ticket, so the section key is in the key area.
+- The NCA header (0xc00 bytes) is encrypted with AES-XTS and the
+  `header_key`. The Switch puts the sector number in the tweak as a
+  big-endian value. The magic is `NCA3`. The key generation of this game
+  is the larger of the bytes at 0x206 and 0x220, less one.
+- The key area holds 4 keys, encrypted with AES-ECB and the key area key.
+  Key 2 decrypts the sections in AES-CTR mode.
+- The RomFS section has IVFC hash levels. The last level is the RomFS. The
+  counter of a block is the 8 bytes at 0x140 of the section header in
+  reverse order, then the offset in the NCA divided by 16, big-endian.
+- The RomFS has a header of 10 u64 values, a directory table, a file
+  table, and the file data.
+
+The 2125 files that the crate reads from the NSP have the same bytes as
+the files that hactool extracts: 6,401,268,984 bytes. An import from the
+NSP gives the same 43339 files as an import from the extracted RomFS.
+
+## The English patch file
+
+The English patch ships as a patch file of deltas. `dlplayer make-patch`
+makes it from the dump and the RomFS of the patch, and `dlplayer import
+--translation` applies it.
+
+A delta has the magic `DLD1`, the size of the new file, the FNV-1a hash
+of the old file, and operations: copy from the old file, or insert new
+bytes. The import refuses a delta if the hash of the file of the dump is
+different. A patch file has the magic `DLPS`, a version, and the deltas
+by key. A key is a RomFS path, or a file in an archive, for example
+`script.cpk/mb_aya_Dark_01.dat` or
+`Archive/advUI.nxonnx32.bea/layout/mb_advUI.lyt`.
+
+The patch file of the English patch has 717 deltas and 12,465,713 bytes:
+
+| Source | Changed files | New size | Delta |
+|---|---|---|---|
+| `script.cpk` | 706 scripts | 69,243,048 bytes | 12,400,765 bytes |
+| `advUI.bea` | 2 layouts | 22,572,116 bytes | 2,050 bytes |
+| `lua.bea` | 7 scripts | 97,500 bytes | 4,637 bytes |
+| `static~select.bin.bea` | 1 table | 43,328 bytes | 21,132 bytes |
+| `static~bg.bin.bea` | 1 table | 28,353 bytes | 7,597 bytes |
+| `static~speaker.bin.bea` | 1 table | 3,954 bytes | 3,256 bytes |
+
+The deltas of the scripts hold mostly the English text. An import with
+the patch file gives the same scripts, tables, and layouts as an import
+with the patched files over the dump.
+
 ## Bezel Engine archives
 
 A `.bea` file has the magic `SCNE`. The `bea` crate reads it.
