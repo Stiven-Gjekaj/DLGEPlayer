@@ -80,3 +80,21 @@ Each entry gives the reason.
   plays only Ogg Theora video, so phase 6 must decide how to play them.
 - **The importer uses all CPU cores by default.** `--jobs` limits the
   threads.
+
+## The first start
+
+- **The user supplies the NSP file and `prod.keys` of their own console.**
+  The owner chose this on 2026-11-01. The importer decrypts the NSP and
+  reads the RomFS itself. The user needs no other tool. Reason: the
+  extraction of the RomFS with `hactool` is the hardest step for most
+  users.
+- **After the import, the player tells the user that they can delete the
+  NSP and `prod.keys`.** The owner chose this on 2026-11-01. Reason: the
+  player reads only the import folder, and a phone has little space.
+- **The app never holds keys.** The user brings them.
+- **The English patch comes with the app.** The owner has the permission
+  of the patch authors, given on 2026-11-01. The app credits them. The
+  app ships only the work of the translators: the English text and the
+  changes to the user interface images. It does not ship the patched
+  `script.cpk` or the patched `.bea` files, because they also hold the
+  Japanese script and the art of the game.
