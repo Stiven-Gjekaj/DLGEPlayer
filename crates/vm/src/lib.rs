@@ -2,12 +2,14 @@
 //!
 //! `Program` loads the scripts and the tables. `Session` runs a chapter:
 //! each run of a label queues commands, and the session plays them through
-//! a `Host`.
+//! a `Host`. `runner` runs each chapter with each choice and reports the
+//! coverage.
 
 use std::fmt;
 
 pub mod machine;
 pub mod program;
+pub mod runner;
 pub mod session;
 
 pub use machine::{Command, Val};
