@@ -20,7 +20,7 @@ _Haunted Dark Bridal and MORE,BLOOD, on your computer and your phone, from your 
 <p align="center">
   <a href="#overview"><b>Overview</b></a> |
   <a href="#you-need-a-copy-of-the-game"><b>Your copy</b></a> |
-  <a href="#make-a-dump"><b>Dump</b></a> |
+  <a href="#what-you-need-from-your-switch"><b>Dump</b></a> |
   <a href="#build"><b>Build</b></a> |
   <a href="docs/formats.md"><b>Formats</b></a> |
   <a href="docs/decisions.md"><b>Decisions</b></a> |
@@ -80,8 +80,8 @@ Done:
 - Read NintendoWare `.bflyt` layouts and `.bflan` animations
 - Build the character sprites with their expressions
 - Convert HCA and ADX audio to Ogg Vorbis
-- Import a dump into a normalized folder with one command, with the English
-  patch as an option
+- Import an NSP with your keys into a normalized folder with one command
+- Apply the English patch as a file of deltas
 
 Planned:
 
@@ -99,17 +99,13 @@ owners. The tools read them from your copy. You need:
   `0100BD700E648000`)
 - the keys of your own console
 
-## Make a dump
+## What you need from your Switch
 
-1. Unpack the NSP:
+- the NSP file of the game, dumped from your copy
+- the `prod.keys` file of your console
 
-       hactool -k prod.keys -t pfs0 --outdir=nsp "DIABOLIK LOVERS GRAND EDITION.nsp"
-
-2. Extract the RomFS of the largest NCA:
-
-       hactool -k prod.keys --romfsdir=romfs nsp/<largest>.nca
-
-Keep the dump outside the repository.
+The importer reads the NSP with your keys. You need no other tool. After
+the import, you can delete the NSP and the keys.
 
 ## Build
 
@@ -121,13 +117,16 @@ The tool is `target/release/dlplayer`.
 
 ## Import a dump
 
-    dlplayer import romfs imported
+    dlplayer import game.nsp imported --keys prod.keys
 
 The command writes the folder `imported` with a `manifest.json`. A full
 import takes 4 to 5 minutes on 10 cores and writes 6.6 GB.
 
-- `--patch <dir>` puts the files of a patch over the dump, for example the
-  RomFS of the English patch.
+- `--translation en.dlpatch` applies a patch file from `make-patch`, for
+  example the English patch.
+- `--patch <dir>` puts the files of a patch folder over the dump.
+- The input can also be a RomFS folder that another tool extracted. A
+  folder needs no keys.
 - `--jobs <n>` uses `n` threads. Without it, the import uses all cores.
 - `--quality <q>` sets the Vorbis quality, from -0.2 to 1.0. The default is
   0.4.
@@ -140,7 +139,8 @@ import takes 4 to 5 minutes on 10 cores and writes 6.6 GB.
 
 | Command | Result |
 | ------- | ------ |
-| `dlplayer import romfs imported` | Converts a dump into the folder that the player reads |
+| `dlplayer import game.nsp imported --keys prod.keys` | Converts a dump into the folder that the player reads |
+| `dlplayer make-patch game.nsp patch_romfs en.dlpatch --keys prod.keys` | Makes a patch file of deltas from the dump to a patched RomFS |
 | `dlplayer cpk list romfs/script.cpk` | Prints the files in an archive |
 | `dlplayer cpk extract romfs/script.cpk scripts` | Writes the files of an archive to a directory |
 | `dlplayer disasm scripts/mb_aya_Dark_01.dat` | Prints the listing of one script |
@@ -163,6 +163,7 @@ import takes 4 to 5 minutes on 10 cores and writes 6.6 GB.
 | `bntx` | Decodes BNTX textures to RGBA pixels |
 | `sarc` | Reads SARC archives, such as the layouts |
 | `lyt` | Reads NintendoWare `.bflyt` layouts and `.bflan` animations |
+| `nsp` | Reads the RomFS of an NSP file with the keys of the user |
 | `importer` | Converts a dump into a normalized folder: the script IR, the images, the sprites, the audio, and the layouts |
 | `vm` | Runs the script bytecode. Empty. |
 | `player` | The Godot 4 extension. Empty. |
@@ -177,6 +178,8 @@ game. The corpus tests read a real dump only if you set these variables:
 
 - `DLGE_SCRIPTS`: a directory of extracted `.dat` scripts
 - `DLGE_ARCHIVES`: the `Archive` directory of the RomFS
+- `DLGE_NSP`, `DLGE_KEYS`, and `DLGE_ROMFS`: the NSP, the keys, and an
+  extracted RomFS to compare with
 
 ```
 DLGE_SCRIPTS=scripts DLGE_ARCHIVES=romfs/Archive cargo test --workspace --release

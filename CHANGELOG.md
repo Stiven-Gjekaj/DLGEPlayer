@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The `nsp` crate reads the RomFS of an NSP with the keys of the user. All
+  2125 files agree with hactool, byte for byte.
+- `dlplayer import` takes an NSP and `--keys`. The import from the NSP
+  gives the same files as the import from an extracted RomFS.
+- `dlplayer make-patch` makes a patch file of deltas, and `dlplayer import
+  --translation` applies it. The English patch is 717 deltas and 12.5 MB.
 - `dlplayer import` converts a dump into the folder that the player reads,
   with `manifest.json`. The full JP dump imports with no failure.
 - The import writes each script as JSON IR. A code address becomes an
