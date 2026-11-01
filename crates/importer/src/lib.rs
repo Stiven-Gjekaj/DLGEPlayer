@@ -2,6 +2,7 @@
 
 pub mod adx;
 pub mod audio;
+pub mod delta;
 pub mod image;
 pub mod import;
 pub mod ir;
