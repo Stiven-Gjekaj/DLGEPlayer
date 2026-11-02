@@ -33,6 +33,14 @@ func _notification(what: int) -> void:
 			save_profile()
 
 
+## Gives the default import folder. On iOS it is in the folder of the app,
+## because the app cannot write to other folders.
+func default_import_folder() -> String:
+	if OS.get_name() == "iOS":
+		return OS.get_user_data_dir().path_join("import")
+	return OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS).path_join("DLGE Player")
+
+
 ## Gives a setting. A missing setting gives the default.
 func setting(key: String, default: Variant) -> Variant:
 	return settings.get_value("player", key, default)

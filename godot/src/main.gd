@@ -122,7 +122,13 @@ var _setup := {"input": "", "keys": "", "out": ""}
 
 func show_setup(message: String = "") -> void:
 	if _setup.out == "":
-		_setup.out = OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS).path_join("DLGE Player")
+		_setup.out = App.default_import_folder()
+	if OS.get_name() == "Android":
+		# The importer reads and writes files with their paths. On Android
+		# this needs the permission for all files.
+		OS.request_permissions()
+	if App.mobile:
+		_find_inbox()
 	var s := Ui.screen(1.0)
 	var box := _column(s, Vector2(200, 80), 1520)
 	box.add_child(Ui.label("DLGE Player", 72, Ui.GOLD))
@@ -144,6 +150,8 @@ func show_setup(message: String = "") -> void:
 	var small := CheckBox.new()
 	small.text = "Smaller files (WebP images, lower audio quality)"
 	small.add_theme_font_size_override("font_size", 32)
+	# A phone has less storage, so the smaller files are the default there.
+	small.button_pressed = App.mobile
 	box.add_child(small)
 	if message != "":
 		var m := Ui.label(message, 30, Color(1, 0.55, 0.55))
@@ -170,6 +178,20 @@ func show_setup(message: String = "") -> void:
 	_switch(s)
 
 
+## On a phone, the player also looks for the NSP file and prod.keys in a
+## known folder. On iOS it is the folder of the app, which the Files app
+## shows. On Android it is the Download folder.
+func _find_inbox() -> void:
+	var dir := OS.get_user_data_dir()
+	if OS.get_name() == "Android":
+		dir = OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
+	for file in DirAccess.get_files_at(dir):
+		if _setup.input == "" and file.get_extension().to_lower() == "nsp":
+			_setup.input = dir.path_join(file)
+		elif _setup.keys == "" and file.get_extension().to_lower() == "keys":
+			_setup.keys = dir.path_join(file)
+
+
 func _file_row(box: VBoxContainer, title: String, key: String, filters: Array, mode: FileDialog.FileMode) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 20)
@@ -191,7 +213,9 @@ func _pick(mode: FileDialog.FileMode, filters: Array, done: Callable) -> void:
 	var dialog := FileDialog.new()
 	dialog.file_mode = mode
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
-	dialog.use_native_dialog = true
+	# The picker of Android gives content URIs, but the importer needs
+	# paths. The dialog of Godot gives paths.
+	dialog.use_native_dialog = OS.get_name() != "Android"
 	dialog.filters = PackedStringArray(filters)
 	dialog.file_selected.connect(done)
 	dialog.dir_selected.connect(done)
