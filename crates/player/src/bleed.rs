@@ -21,7 +21,16 @@ pub fn bleed(rgba: &mut [u8], width: usize, height: usize) {
             }
             let mut sum = [0u32; 3];
             let mut n = 0;
-            for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)] {
+            for (dx, dy) in [
+                (-1, 0),
+                (1, 0),
+                (0, -1),
+                (0, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+                (1, 1),
+            ] {
                 let (nx, ny) = (x as isize + dx, y as isize + dy);
                 if nx < 0 || ny < 0 || nx >= width as isize || ny >= height as isize {
                     continue;
@@ -35,9 +44,9 @@ pub fn bleed(rgba: &mut [u8], width: usize, height: usize) {
                 }
                 n += 1;
             }
-            if n > 0 {
-                for c in 0..3 {
-                    rgba[at + c] = (sum[c] / n) as u8;
+            for c in 0..3 {
+                if let Some(mean) = sum[c].checked_div(n) {
+                    rgba[at + c] = mean as u8;
                 }
             }
         }
