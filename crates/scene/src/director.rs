@@ -324,6 +324,30 @@ fn text(args: &[Val], i: usize) -> String {
     }
 }
 
+/// Removes the keyword marks from a text and keeps the words between them.
+///
+/// A keyword starts with a mark such as `#KW_F[]` or `#KW_T1[5]`, and ends
+/// with `#KW_ED[]`. The English patch puts `｡` between the marks where the
+/// line needs a space, so a keyword that holds only `｡` becomes a space.
+pub(crate) fn keywords(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("#KW_") {
+        let Some(end) = rest[at..].find(']') else {
+            break;
+        };
+        out.push_str(&rest[..at]);
+        let mark = &rest[at..at + end + 1];
+        rest = &rest[at + end + 1..];
+        if mark != "#KW_ED[]" && rest.starts_with("｡#KW_ED[]") {
+            out.push(' ');
+            rest = &rest["｡#KW_ED[]".len()..];
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Gives an integer argument.
 fn int(args: &[Val], i: usize) -> i32 {
     args.get(i).map(Val::as_int).unwrap_or(0)
@@ -642,10 +666,14 @@ impl<'a> Director<'a> {
         }
     }
 
-    /// Puts the names of the heroine into a text.
+    /// Puts the names of the heroine into a text, and removes the keyword
+    /// marks.
     fn names(&self, text: &str) -> String {
-        text.replace("#Name[1]", &self.profile.family_name)
-            .replace("#Name[2]", &self.profile.given_name)
+        keywords(
+            &text
+                .replace("#Name[1]", &self.profile.family_name)
+                .replace("#Name[2]", &self.profile.given_name),
+        )
     }
 
     /// Gives the game prefix of the current script: `ve` or `mb`.

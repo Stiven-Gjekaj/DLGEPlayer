@@ -403,3 +403,23 @@ fn opens_chapters_in_order() {
         Some(("mb", "aya", "Dark", 3))
     );
 }
+
+#[test]
+fn removes_the_keyword_marks() {
+    use crate::director::keywords;
+    assert_eq!(
+        keywords("I could#KW_T1[5]｡#KW_ED[]no longer go back."),
+        "I could no longer go back."
+    );
+    assert_eq!(
+        keywords("#KW_F[]先生#KW_ED[]が言うように"),
+        "先生が言うように"
+    );
+    assert_eq!(
+        keywords("今までのそれとは#KW_T2[5]どこか違う#KW_ED[]ような"),
+        "今までのそれとはどこか違うような"
+    );
+    assert_eq!(keywords("poison.#KW_F[]｡#KW_ED[]"), "poison. ");
+    assert_eq!(keywords("A sign ｡ stays."), "A sign ｡ stays.");
+    assert_eq!(keywords("#KW_T1[5 with no end"), "#KW_T1[5 with no end");
+}
