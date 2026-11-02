@@ -11,6 +11,7 @@ members = [
     "crates/lyt",
     "crates/nsp",
     "crates/vm",
+    "crates/scene",
     "crates/player",
     "crates/dlplayer",
 ]
@@ -35,3 +36,4 @@ sarc = { path = "crates/sarc" }
 lyt = { path = "crates/lyt" }
 nsp = { path = "crates/nsp" }
 vm = { path = "crates/vm" }
+scene = { path = "crates/scene" }
