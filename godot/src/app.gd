@@ -72,6 +72,12 @@ func image(file: String) -> Image:
 	if img == null:
 		push_warning("cannot load " + file)
 		return null
+	if file.begins_with("sprites/"):
+		# A transparent pixel of a sheet is black. When the screen scales a
+		# sprite, the filter mixes that black into the edge of each patch
+		# and the edge shows a dark line. This gives each transparent pixel
+		# the colour of the pixels next to it.
+		DlPlayer.bleed_alpha(img)
 	if _images.size() > 24:
 		_images.clear()
 	_images[file] = img

@@ -9,6 +9,7 @@ use std::path::Path;
 use godot::prelude::*;
 use scene::{Assets, Director, Event, Profile, SaveFile, menu};
 
+mod bleed;
 pub mod movie;
 mod value;
 
@@ -341,6 +342,25 @@ impl DlPlayer {
             Some(d) => Self::events(d.rebuild()),
             None => Array::new(),
         }
+    }
+
+    /// Gives colour to the transparent pixels at the edges of an RGBA
+    /// image, so that a scaled sprite shows no dark line at its edges.
+    #[func]
+    fn bleed_alpha(mut image: Gd<godot::classes::Image>) {
+        if image.get_format() != godot::classes::image::Format::RGBA8 {
+            image.convert(godot::classes::image::Format::RGBA8);
+        }
+        let (w, h) = (image.get_width() as usize, image.get_height() as usize);
+        let mut data = image.get_data().to_vec();
+        bleed::bleed(&mut data, w, h);
+        image.set_data(
+            w as i32,
+            h as i32,
+            false,
+            godot::classes::image::Format::RGBA8,
+            &PackedByteArray::from(data.as_slice()),
+        );
     }
 
     /// Gives the names that gave no file.
