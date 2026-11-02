@@ -1,0 +1,4 @@
+# The oldest iOS version that the player supports. The export preset of
+# Godot uses the same version. The C code of the dependencies reads it too.
+[env]
+IPHONEOS_DEPLOYMENT_TARGET = "15.0"
