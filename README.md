@@ -32,9 +32,11 @@ _Haunted Dark Bridal and MORE,BLOOD, on your computer and your phone, from your 
 ---
 
 > [!NOTE]
-> **Phases 1 to 6 of 8 are done.** The player plays both games on macOS.
-> The CI builds Windows and Linux, but nobody has played those builds yet.
-> On the first start, the player imports your NSP with your keys.
+> **Phases 1 to 6 of 8 are done. Phase 7 is in progress.** The player
+> plays both games on macOS and on an Android emulator. The CI builds
+> Windows, Linux, Android, and iOS. Nobody has played the Windows, Linux,
+> and iOS builds yet. On the first start, the player imports your NSP with
+> your keys.
 > [docs/roadmap.md](docs/roadmap.md) gives the next phases.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes.
 
@@ -92,10 +94,13 @@ Done:
   and skip modes, a gallery, a music room, and settings
 - Play the MP4 movies with no FFmpeg
 - Import the NSP on the first start, in the app
+- Play on a phone with touch: tap, long press, swipe down, and the back
+  button of Android ([docs/player.md](docs/player.md#phones))
 
 Planned:
 
-- Builds for Android and iOS ([phase 7](docs/roadmap.md))
+- Play the iOS build on a device or in the simulator
+  ([phase 7](docs/roadmap.md))
 - The font of the game ([phase 8](docs/roadmap.md))
 
 ## You need a copy of the game

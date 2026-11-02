@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The player runs on Android and iOS. A tap shows the next message, a
+  long press hides the message window, a swipe down opens the backlog, and
+  the back button of Android closes a menu.
+- The first start on a phone finds the NSP file and `prod.keys` in the
+  `Download` folder of Android or in the folder of the app on iOS. The
+  import runs on the phone, with the smaller files by default.
+- `scripts/build-player.sh` builds the library for Android and iOS. The
+  CI makes an APK and an IPA with no signature.
+- The player saves the profile when the app goes to the background.
 - The Godot player plays both games. It shows the message window of each
   game, the speaker, the sprites with blinks and lip sync, the heroine face,
   the backgrounds, the event images, the effects, and the choices. It plays
