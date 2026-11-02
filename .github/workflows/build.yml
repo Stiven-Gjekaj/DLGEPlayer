@@ -1,4 +1,4 @@
-# Builds the desktop player for macOS, Windows, and Linux.
+# Builds the player for macOS, Windows, Linux, Android, and iOS.
 #
 # Each job builds the Rust library of the player, copies it and the English
 # patch into the Godot project, and exports the project with the export
@@ -116,4 +116,110 @@ jobs:
         with:
           name: dlge-player-${{ matrix.preset }}
           path: godot/export
+          if-no-files-found: error
+
+  mobile:
+    name: ${{ matrix.preset }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: Android
+            godot: linux.x86_64
+          - os: macos-latest
+            preset: iOS
+            godot: macos.universal
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: build the library for Android
+        if: matrix.preset == 'Android'
+        run: |
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
+          ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME scripts/build-player.sh release android
+      - name: build the library for iOS
+        if: matrix.preset == 'iOS'
+        run: |
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+          scripts/build-player.sh release ios
+
+      - name: cache Godot
+        id: godot
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/godot
+            ~/godot-templates
+          key: godot-${{ env.GODOT_VERSION }}-${{ matrix.godot }}
+      - name: download Godot
+        if: steps.godot.outputs.cache-hit != 'true'
+        run: |
+          base=https://github.com/godotengine/godot/releases/download/$GODOT_VERSION-stable
+          mkdir -p ~/godot ~/godot-templates
+          cd ~/godot
+          curl -sSLO "$base/Godot_v$GODOT_VERSION-stable_${{ matrix.godot }}.zip"
+          curl -sSLO "$base/Godot_v$GODOT_VERSION-stable_export_templates.tpz"
+          curl -sSLO "$base/SHA512-SUMS.txt"
+          grep -E "_${{ matrix.godot }}.zip|_export_templates.tpz" SHA512-SUMS.txt | grep -v mono > sums
+          if command -v sha512sum >/dev/null; then sha512sum -c sums; else shasum -a 512 -c sums; fi
+          unzip -q "Godot_v$GODOT_VERSION-stable_${{ matrix.godot }}.zip"
+          unzip -q "Godot_v$GODOT_VERSION-stable_export_templates.tpz" -d ~/godot-templates
+          rm -f ./*.zip ./*.tpz
+      - name: install the export templates
+        run: |
+          case "$RUNNER_OS" in
+          macOS) dir="$HOME/Library/Application Support/Godot/export_templates" ;;
+          *) dir="$HOME/.local/share/godot/export_templates" ;;
+          esac
+          mkdir -p "$dir"
+          cp -R ~/godot-templates/templates "$dir/$GODOT_VERSION.stable"
+
+      # A debug export of Android needs a key. The job makes a new key each
+      # time. The user installs the APK by hand, so the key has no other use.
+      - name: export for Android
+        if: matrix.preset == 'Android'
+        run: |
+          godot=$(ls ~/godot/Godot_v*_linux.x86_64)
+          keytool -genkeypair -keystore "$RUNNER_TEMP/debug.keystore" -alias androiddebugkey \
+            -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$RUNNER_TEMP/debug.keystore"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android
+          "$godot" --headless --path godot --import || true
+          mkdir -p godot/export/android
+          "$godot" --headless --path godot --export-debug Android export/android/dlge-player.apk
+          ls -l godot/export/android/dlge-player.apk
+
+      # Godot writes an Xcode project. Xcode builds the app with no
+      # signature. The user signs the IPA with a sideloading tool.
+      - name: export for iOS
+        if: matrix.preset == 'iOS'
+        run: |
+          godot=~/godot/Godot.app/Contents/MacOS/Godot
+          "$godot" --headless --path godot --import || true
+          mkdir -p godot/export/ios
+          "$godot" --headless --path godot --export-release iOS "export/ios/DLGE Player.xcodeproj"
+          cd godot/export/ios
+          xcodebuild -project "DLGE Player.xcodeproj" -scheme "DLGE Player" -configuration Release \
+            -sdk iphoneos -destination generic/platform=iOS -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build
+          mkdir -p ipa/Payload
+          cp -R "build/Build/Products/Release-iphoneos/DLGE Player.app" ipa/Payload/
+          (cd ipa && zip -qr "../DLGE Player.ipa" Payload)
+          ls -l "DLGE Player.ipa"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dlge-player-${{ matrix.preset }}
+          path: |
+            godot/export/android/*.apk
+            godot/export/ios/*.ipa
           if-no-files-found: error
