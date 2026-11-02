@@ -59,6 +59,23 @@ func path(file: String) -> String:
 
 
 var _textures := {}
+var _images := {}
+
+
+## Loads an image of the import folder. The images stay in a small cache.
+func image(file: String) -> Image:
+	if file == "":
+		return null
+	if _images.has(file):
+		return _images[file]
+	var img := Image.load_from_file(path(file))
+	if img == null:
+		push_warning("cannot load " + file)
+		return null
+	if _images.size() > 24:
+		_images.clear()
+	_images[file] = img
+	return img
 
 
 ## Loads an image of the import folder as a texture. The textures stay in
@@ -68,11 +85,10 @@ func texture(file: String) -> Texture2D:
 		return null
 	if _textures.has(file):
 		return _textures[file]
-	var image := Image.load_from_file(path(file))
-	if image == null:
-		push_warning("cannot load " + file)
+	var img := image(file)
+	if img == null:
 		return null
-	var tex := ImageTexture.create_from_image(image)
+	var tex := ImageTexture.create_from_image(img)
 	if _textures.size() > 64:
 		_textures.clear()
 	_textures[file] = tex
