@@ -11,7 +11,7 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 | 4 | Make the importer. It converts the RomFS one time into a normalized folder: scripts as IR, PNG images, Ogg Vorbis audio, MP4 movies, and `manifest.json`. | One command makes the folder from a dump. Done. |
 | 4b | Read the NSP with the `prod.keys` of the user: the PFS0 package, the NCA encryption, and the RomFS. Ship the English patch as the text and the image changes of the translators. | `dlplayer import` takes an NSP and `prod.keys` and needs no other tool. The English text shows in the IR. Done. |
 | 5 | Make the VM. It runs the IR with no screen. It keeps flags, globals, saves, and choices. | Each route runs from start to end with no screen. A report shows the coverage. Done. |
-| 6 | Make the desktop player with Godot 4 and gdext: text box, backlog, choices, images, audio, transitions, launcher, saves for each game, gallery, and settings. | Both games play on macOS, Windows, and Linux. |
+| 6 | Make the desktop player with Godot 4 and gdext: text box, backlog, choices, images, audio, transitions, launcher, saves for each game, gallery, and settings. | Both games play on macOS, Windows, and Linux. Done on macOS. The CI exports Windows and Linux. |
 | 7 | Make the mobile player: touch controls, import on the device, and a small storage size. | Both games play on Android and iOS. |
 | 8 | Apply the English patch: put the patch files over the dump, and map the text encoding and the font. | The English text shows in the player. |
 
@@ -37,15 +37,19 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
    NintendoWare layouts. The importer writes the layouts and their
    animations as JSON. The Lua scripts are not converted, so the player
    must make the menu logic again.
-2. Godot plays only Ogg Theora video. The 9 movies are MP4. Phase 6 must
-   find a way to play them, for example a video extension or a conversion
-   on the computer of the user.
+2. Godot plays only Ogg Theora video. The player decodes the 9 MP4
+   movies with `openh264` and `symphonia`. This risk is closed.
 3. The import folder is 6.6 GB, or 3.3 GB with `--mobile`. The movies are
    1.4 GB of it.
 4. 3 opcodes in the scripts have no handler in the game (`0x64f`, `0x69b`,
-   `0x69c`), but the main story reaches them. About 20 engine opcodes have
-   no verified meaning. The player of phase 6 must find what they show.
-5. The menu that opens the chapters is Lua bytecode. The player must make
-   it again from the system flags and `script.bin`.
-6. The English patch uses name tokens such as `#Name[2]` and some
-   characters that need the font of the game. Phase 8 must map them.
+   `0x69c`), but the main story reaches them. `0x69a` and `0x69b` give
+   touch points with voices. The slots of the sprites, the tint colours,
+   and the order of the character select are guesses from the traces.
+5. The menu that opens the chapters is Lua bytecode. The player opens the
+   chapters in order from its own record of finished chapters. The rules of
+   the game can differ.
+6. The English patch uses name tokens such as `#Name[2]`. The player puts
+   the names of the settings in their place. Some characters need the font
+   of the game. Phase 8 must map them.
+7. The Windows and Linux builds come from CI. Nobody has played them on
+   those systems yet.
