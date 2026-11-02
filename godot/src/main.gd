@@ -11,6 +11,8 @@ var overlay: Control
 
 func _ready() -> void:
 	theme = Ui.theme()
+	# The back button of Android closes a menu. It does not quit the game.
+	get_tree().quit_on_go_back = false
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_make_buses()
 	App.apply_audio()
@@ -30,6 +32,22 @@ func _ready() -> void:
 		show_title()
 	if args.has("click"):
 		_auto_click(float(args.click))
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_go_back()
+
+
+## The back button of Android: it closes a menu, opens the settings in a
+## chapter, or goes to the title.
+func _go_back() -> void:
+	if overlay:
+		close_overlay()
+	elif game:
+		_on_menu("settings")
+	elif current and App.root != "":
+		show_title()
 
 
 ## Reads the options after `--` on the command line: `--folder <dir>`,
