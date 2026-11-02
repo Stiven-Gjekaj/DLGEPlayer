@@ -1,0 +1,6 @@
+# The Godot editor writes these.
+/.godot/
+# A build script copies the Rust library here.
+/bin/
+# Export output.
+/export/
