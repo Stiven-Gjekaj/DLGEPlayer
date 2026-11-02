@@ -9,6 +9,9 @@ Each meaning has one of these grades:
 - **code**: the decompiled handler shows the meaning.
 - **data**: the parameters in the 706 scripts show the meaning, for example
   an asset name or a file number. The handler is not read yet.
+- **trace**: the order of the commands in the runs of the VM shows the
+  meaning, with the values after the calls of the script resolve. The
+  player shows it, and the result looks correct on the screen.
 - **guess**: the parameters suggest a meaning. It is not verified.
 
 ## How to repeat the analysis
@@ -198,8 +201,8 @@ The scripts use only 4 and 5.
 |---|---|---|---|---|
 | `0x462` | 37562 | data | Play a voice. Param 0 is the voice number. `140005` is `mb_140005.hca` or `ve_140005.hca` in `voice.cpk`. | `710006bff0` |
 | `0x464` | 11582 | data | Play a sound effect. Param 0 is the number. `325` is `325.hca` in `se.cpk`. | `710006c050` |
-| `0x465` | 8688 | guess | No params. Probably stop the sound effect. | `710006c0a0` |
-| `0x690`, `0x691`, `0x695`, `0x696` | 5574 | guess | Two params: a number and a time in milliseconds such as 250, 1500, or 3000. Probably music and loop sounds with fades. | `710006fce0`, `710006fd30`, `710006fda0`, `710006fdf0` |
+| `0x465` | 8688 | trace | No params. Wait until the sound effect ends. See [the traces](#meanings-from-the-traces). | `710006c0a0` |
+| `0x690`, `0x691`, `0x695`, `0x696` | 5574 | trace | Two params: a number and a time in milliseconds such as 250, 1500, or 3000. Music and loop sounds with fades. See [the traces](#meanings-from-the-traces). | `710006fce0`, `710006fd30`, `710006fda0`, `710006fdf0` |
 
 ## Pictures
 
@@ -287,6 +290,47 @@ The meaning is not known yet.
 
 `0x5a7` and `0x5a8` call the same function with 1 and 0. They are a pair
 that turns one thing on and off.
+
+## Meanings from the traces
+
+`dlplayer trace <folder> <chapter>` prints each command of each run, with
+the arguments after the calls of the script resolve. The traces of all 706
+chapters give these meanings. The player uses them
+([player.md](player.md#events)). The counts are the commands in the runs
+with the first option of each choice.
+
+| Opcode | Count | Grade | Arguments | Meaning |
+|---|---|---|---|---|
+| `0x4bc` | 101746 | trace | speaker | The speaker of the next message, a row of `speaker.bin`. 0 is the heroine (`#Name[2]`). 34 has no name. |
+| `0x4dd` | 19556 | trace | 0 or 1 | Hide or show the message window. |
+| `0x491` | 9795 | guess | 0, frames, mode, 0 | A transition of the screen: the changes after it fade in over the frames. |
+| `0x47e` | 6168 | trace | pose, look, `suma`, red, green, blue, 1 | Prepare a sprite with a look, for example `aya_03` and `aya_03_maji`. -1 is the default colour. |
+| `0x480` | 9108 | trace | pose, slot, layer, offset, frames, 0 | Show the sprite at a slot. The heroine uses the slot -2. |
+| `0x47f` | 26176 | trace | pose, look, `suma`, red, green, blue, 1, 0 | Change the look of a sprite. |
+| `0x482` | 9106 | trace | pose, 0, frames, 0 | Hide a sprite. |
+| `0x483` | 1001 | guess | pose, slot, layer, frames, 0 | Move a sprite to another slot. |
+| `0x61c`, `0x61d` | 27649 | trace | pose, look, `suma`, 128, 128, 128 | The same as `0x47e` and `0x47f` for the face of the heroine. 128 is the normal colour. |
+| `0x456` | 3913 | trace | track, 0 | Play the music `BGM<track>`. |
+| `0x690` | 790 | trace | track, milliseconds | Play the music with a fade in. |
+| `0x457` | 341 | trace | 0 | Stop the music. The handler gives a fade of 1000 ms. |
+| `0x691` | 3853 | trace | milliseconds, 1 | Stop the music with a fade. A new track usually follows. |
+| `0x695`, `0x696` | 409 | trace | number, milliseconds | Play a loop of `loopse` with a fade, and stop it. |
+| `0x465` | 11562 | trace | none | Wait until the sound effect ends. It always follows a sound effect. |
+| `0x466` | 53 | guess | channel, voice, 0 | Play a second voice, for example when two characters speak. |
+| `0x4be` | 6218 | trace | frames | Wait. 60 frames are one second. |
+| `0x3fa` | 2669 | trace | name, 0, 0, frames, 0 | Show a background of `bg.bin` with a fade. |
+| `0x3fb` | 779 | trace | name, time | Show an event image of `ev.bin`, or a background. The time is a guess: 3.0 is about half a second. |
+| `0x402`, `0x403` | 642 | trace | name, 0, 0, frames, 0 | Show or clear a foreground, for example `fg_kako`. |
+| `0x488`, `0x48a` | 1206 | guess | 0, 0, layer, colour, alpha, frames | Fill the screen with a colour. 7 is probably red. |
+| `0x489` | 883 | guess | 0, 0, colour, frames | Remove the colour. |
+| `0x513`, `0x510` | 4916 | guess | 0, axis, size, count; then 0, axis, frames | A shake of the screen. |
+| `0x4f4`, `0x3f4` | 46 | guess | position and zoom | A zoom and a move of the camera on an event image. |
+| `0x69a` | 371 | guess | index, x, y, voice | A touch point on a screen of 960 by 544, with a voice. |
+| `0x69b` | 231 | guess | none | Wait until the player touches the points. |
+
+These opcodes run, but the player shows nothing for them yet: `0x502`,
+`0x504`, `0x506`, `0x5a7`, `0x5a8`, `0x5a9`, `0x5be`, `0x5cd`, `0x5ce`,
+`0x69c`, `0x6b2`, `0x6c2`, and `0x6c3`.
 
 ## The typed decoder
 
