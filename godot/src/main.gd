@@ -37,6 +37,11 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		_go_back()
+	# The user gives the permission for all files in the settings of
+	# Android. When the app comes back, the first start looks again for
+	# the files.
+	elif what == NOTIFICATION_APPLICATION_RESUMED and _in_setup:
+		show_setup()
 
 
 ## The back button of Android: it closes a menu, opens the settings in a
@@ -81,6 +86,7 @@ func _make_buses() -> void:
 
 
 func _switch(screen: Control) -> void:
+	_in_setup = false
 	close_overlay()
 	if game:
 		game.stop()
@@ -118,6 +124,7 @@ func _column(parent: Control, at: Vector2, width: float) -> VBoxContainer:
 const PATCH := "res://patch/en.dlpatch"
 
 var _setup := {"input": "", "keys": "", "out": ""}
+var _in_setup := false
 
 
 func show_setup(message: String = "") -> void:
@@ -176,6 +183,7 @@ func show_setup(message: String = "") -> void:
 		row.add_child(Ui.button("Quit", get_tree().quit))
 	box.add_child(row)
 	_switch(s)
+	_in_setup = true
 
 
 ## On a phone, the player also looks for the NSP file and prod.keys in a
