@@ -132,6 +132,60 @@ The screen is 1920 by 1080. Godot scales it to the window.
 
 The bar at the top has Auto, Skip, Log, Save, Load, Config, and Title.
 
+## Phones
+
+The player runs on Android and iOS. The screen is the same as on a
+computer.
+
+| Touch | Action |
+|---|---|
+| Tap | Show the full text, then the next message |
+| Long press | Hide or show the message window |
+| Swipe down | Open the backlog |
+| Back button of Android | Close a menu, or open the settings in a chapter |
+
+The bar at the top also has a Hide button. A phone app has no Quit button
+and no full screen setting.
+
+The player saves the profile when the app goes to the background, because
+the system can stop the app there with no warning.
+
+The import runs on the phone. The smaller files are the default there.
+
+| | Android | iOS |
+|---|---|---|
+| Where to put the NSP file and `prod.keys` | The `Download` folder | The folder of the app in the Files app |
+| The import folder | `Documents/DLGE Player` | `import` in the folder of the app |
+| Permission | All files access. The player asks for it at the first start. | None |
+
+The first start finds the two files in that folder. For a file in another
+folder, use the Select button.
+
+### Build for a phone
+
+    scripts/build-player.sh release android
+    scripts/build-player.sh release ios
+
+`android` needs `cargo-ndk`, the Android NDK, and the Rust target
+`aarch64-linux-android`. `ios` needs Xcode and the Rust targets
+`aarch64-apple-ios`, `aarch64-apple-ios-sim`, and `x86_64-apple-ios`. It
+makes `godot/bin/ios/libplayer.xcframework`. The simulator part of the
+iOS template of Godot 4.7.2 has only x86_64 code, so the simulator
+library has x86_64 code too.
+
+`.cargo/config.toml` sets the oldest iOS version, 15.0. The iOS preset uses
+the same version.
+
+The iOS preset writes an Xcode project. The team ID `0000000000` is a
+placeholder. Build the app with no signature, then put it in an IPA:
+
+    xcodebuild -project "DLGE Player.xcodeproj" -scheme "DLGE Player" \
+        -configuration Release -sdk iphoneos -derivedDataPath build \
+        CODE_SIGNING_ALLOWED=NO build
+
+The user signs the IPA with a sideloading tool, for example SideStore or
+AltStore. The workflow `build.yml` makes the APK and the IPA.
+
 ## Command line options for tests
 
 The options come after `--`:
