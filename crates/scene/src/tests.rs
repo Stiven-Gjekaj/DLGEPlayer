@@ -431,8 +431,11 @@ fn picks_the_keywords_of_a_monologue() {
     let mut code = vec![engine(0x5a7, vec![])];
     code.extend(line("I wonder how I can earn his#KW_T1[5]｡#KW_ED[]trust?"));
     code.extend(line("#KW_F[]先生#KW_ED[]が言うように"));
-    code.extend(line("それとは#KW_T2[5]どこか違う#KW_ED[]ような"));
-    code.extend([engine(0x6b2, vec![]), engine(0x5a8, vec![])]);
+    // As in the game, 0x6b2 comes before the last message.
+    code.push(I::TextLine {
+        text: "それとは#KW_T2[5]どこか違う#KW_ED[]ような".into(),
+    });
+    code.extend([engine(0x6b2, vec![]), I::ShowMessage, engine(0x5a8, vec![])]);
     code.extend(line("After"));
     code.extend([engine(0x700, vec![]), I::Return]);
     let mut program = Program::empty();

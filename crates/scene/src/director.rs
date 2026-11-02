@@ -33,6 +33,8 @@ const QUIET_LIMIT: usize = 10_000;
 const MONOLOGUE_START: u32 = 0x5a7;
 /// The opcode of the keyword pick at the end of a monologue.
 const MONOLOGUE_PICK: u32 = 0x6b2;
+/// The opcode that ends a monologue.
+const MONOLOGUE_END: u32 = 0x5a8;
 /// The number of picks of a keyword pick.
 const MONOLOGUE_PICKS: usize = 2;
 
@@ -346,6 +348,10 @@ pub struct Director<'a> {
     /// A run started, so the next run needs `finish` first.
     started: bool,
     ended: bool,
+    /// A keyword pick comes after the next message.
+    pick_after_message: bool,
+    /// A keyword pick comes before the next command.
+    pick_now: bool,
     /// The names that gave no file, for example `music 3`.
     missing: RefCell<BTreeSet<String>>,
 }
@@ -536,6 +542,8 @@ impl<'a> Director<'a> {
             last_text: Default::default(),
             started: false,
             ended: false,
+            pick_after_message: false,
+            pick_now: false,
             missing: RefCell::default(),
         })
     }
@@ -571,6 +579,8 @@ impl<'a> Director<'a> {
             last_text: Default::default(),
             started: false,
             ended: false,
+            pick_after_message: false,
+            pick_now: false,
             missing: RefCell::default(),
         };
         director.commands = director.session.run()?;
@@ -652,6 +662,12 @@ impl<'a> Director<'a> {
                 next: crate::menu::next_chapter(self.program, &self.chapter),
             });
         }
+        if self.pick_now {
+            self.pick_now = false;
+            if let Some(event) = self.monologue_pick() {
+                return Ok(event);
+            }
+        }
         let mut quiet = 0;
         loop {
             if self.index >= self.commands.len() {
@@ -689,18 +705,26 @@ impl<'a> Director<'a> {
                     self.pending = Some(Pending::Character(command.clone()));
                     return Ok(Event::SelectCharacter);
                 }
+                // The script gives 0x6b2 before the last message of the
+                // monologue, but the game reads the keywords of that message
+                // too. So the pick comes after the next message.
                 Command::Engine {
                     opcode: MONOLOGUE_PICK,
                     ..
-                } if !self.scene.keywords.is_empty() => {
+                } => {
                     self.session.play(&command, &mut Fixed(0))?;
-                    let picks = MONOLOGUE_PICKS.min(self.scene.keywords.len());
-                    self.pending = Some(Pending::Monologue {
-                        left: picks,
-                        score: 0,
-                    });
-                    let options = self.scene.keywords.iter().map(|k| k.line.clone()).collect();
-                    return Ok(Event::Monologue { options, picks });
+                    self.pick_after_message = true;
+                    continue;
+                }
+                Command::Engine {
+                    opcode: MONOLOGUE_END,
+                    ..
+                } if self.pick_after_message => {
+                    self.index -= 1;
+                    if let Some(event) = self.monologue_pick() {
+                        return Ok(event);
+                    }
+                    self.index += 1;
                 }
                 _ => {}
             }
@@ -709,6 +733,9 @@ impl<'a> Director<'a> {
                 continue;
             }
             if let Some(event) = self.translate(&command) {
+                if self.pick_after_message && matches!(command, Command::Message(_)) {
+                    self.pick_now = true;
+                }
                 return Ok(event);
             }
         }
@@ -752,6 +779,22 @@ impl<'a> Director<'a> {
                 Err(Error::Waiting("no character select".into()))
             }
         }
+    }
+
+    /// Starts the keyword pick of a monologue. Gives nothing for a
+    /// monologue with no keywords.
+    fn monologue_pick(&mut self) -> Option<Event> {
+        self.pick_after_message = false;
+        if self.scene.keywords.is_empty() {
+            return None;
+        }
+        let picks = MONOLOGUE_PICKS.min(self.scene.keywords.len());
+        self.pending = Some(Pending::Monologue {
+            left: picks,
+            score: 0,
+        });
+        let options = self.scene.keywords.iter().map(|k| k.line.clone()).collect();
+        Some(Event::Monologue { options, picks })
     }
 
     /// Gives one pick of a keyword pick, 0 for the first keyword. Gives
