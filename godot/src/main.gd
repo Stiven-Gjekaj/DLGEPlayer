@@ -17,6 +17,9 @@ func _ready() -> void:
 	var args := _arguments()
 	if App.open_import(args.get("folder", "")) != "":
 		show_setup()
+	elif args.has("screen"):
+		App.game = args.get("game", "ve")
+		call("show_" + args.screen)
 	elif args.has("movie"):
 		show_title()
 		play_movie(args.movie)
@@ -30,7 +33,8 @@ func _ready() -> void:
 
 
 ## Reads the options after `--` on the command line: `--folder <dir>`,
-## `--chapter <name>`, and `--click <seconds>`. A test uses them with the
+## `--chapter <name>`, `--movie <name>`, `--screen <name>` with
+## `--game <ve or mb>`, and `--click <seconds>`. A test uses them with the
 ## movie writer of Godot to save pictures of a chapter.
 func _arguments() -> Dictionary:
 	var out := {}
