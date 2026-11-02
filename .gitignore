@@ -32,3 +32,6 @@
 
 # Operating system files.
 .DS_Store
+
+# Local tools. A script downloads them.
+/tools/godot/
