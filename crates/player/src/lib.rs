@@ -10,6 +10,7 @@ use godot::prelude::*;
 use scene::{Assets, Director, Event, Profile, SaveFile, menu};
 
 mod bleed;
+mod import;
 pub mod movie;
 mod value;
 
@@ -460,5 +461,82 @@ impl DlMovie {
         stream.set_mix_rate(sound.rate as i32);
         stream.set_data(&PackedByteArray::from(bytes.as_slice()));
         Some(stream)
+    }
+}
+
+/// The import of the first start, for GDScript. A thread runs the
+/// importer, and the screen asks for the progress.
+#[derive(GodotClass)]
+#[class(base = RefCounted, init)]
+pub struct DlImporter {
+    progress: std::sync::Arc<std::sync::Mutex<import::Progress>>,
+}
+
+#[godot_api]
+impl DlImporter {
+    /// Starts an import. `keys` can be empty for a RomFS folder.
+    /// `translation` holds the bytes of a patch file, or nothing. With
+    /// `mobile`, the import writes smaller files. `jobs` is the number of
+    /// threads, or 0 for half of the CPU cores.
+    #[func]
+    fn start(
+        &mut self,
+        input: GString,
+        keys: GString,
+        out: GString,
+        translation: PackedByteArray,
+        mobile: bool,
+        jobs: i32,
+    ) {
+        let jobs = if jobs > 0 {
+            jobs as usize
+        } else {
+            std::thread::available_parallelism()
+                .map(|n| (n.get() / 2).max(1))
+                .unwrap_or(2)
+        };
+        let mut options = if mobile {
+            importer::import::Options::mobile()
+        } else {
+            importer::import::Options::default()
+        };
+        options.jobs = Some(jobs);
+        let keys = keys.to_string();
+        let job = import::Job {
+            input: input.to_string().into(),
+            keys: (!keys.is_empty()).then(|| keys.into()),
+            out: out.to_string().into(),
+            translation: (!translation.is_empty()).then(|| translation.to_vec()),
+            options,
+        };
+        self.progress = Default::default();
+        let progress = self.progress.clone();
+        std::thread::spawn(move || import::run(job, progress));
+    }
+
+    /// Gives the lines of progress after the first `from` lines.
+    #[func]
+    fn lines(&self, from: i32) -> PackedStringArray {
+        let mut out = PackedStringArray::new();
+        if let Ok(p) = self.progress.lock() {
+            for line in p.lines.iter().skip(from.max(0) as usize) {
+                out.push(&GString::from(line));
+            }
+        }
+        out
+    }
+
+    #[func]
+    fn done(&self) -> bool {
+        self.progress.lock().map(|p| p.done).unwrap_or(true)
+    }
+
+    /// Gives the error of the import, or an empty text.
+    #[func]
+    fn error(&self) -> GString {
+        match self.progress.lock() {
+            Ok(p) => GString::from(p.error.as_deref().unwrap_or("")),
+            Err(_) => GString::from("the import stopped"),
+        }
     }
 }

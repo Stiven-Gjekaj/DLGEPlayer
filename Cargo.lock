@@ -774,7 +774,9 @@ name = "player"
 version = "0.1.0"
 dependencies = [
  "godot",
+ "importer",
  "mp4",
+ "nsp",
  "openh264",
  "scene",
  "serde",

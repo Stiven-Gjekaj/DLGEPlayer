@@ -12,6 +12,8 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+importer.workspace = true
+nsp.workspace = true
 mp4 = "0.14.0"
 openh264 = "0.9.9"
 symphonia = { version = "0.5.4", default-features = false, features = ["aac", "isomp4"] }
