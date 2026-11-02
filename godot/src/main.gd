@@ -203,6 +203,7 @@ func show_chapters() -> void:
 			routes[key] = []
 			order.append(key)
 		routes[key].append(c)
+	order.sort_custom(func(a, b): return _route_rank(routes[a][0]) < _route_rank(routes[b][0]))
 	for key in order:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
@@ -226,6 +227,17 @@ const NAMES := {
 	"shu": "Shu", "rei": "Reiji", "aya": "Ayato", "kan": "Kanato", "lai": "Laito",
 	"sub": "Subaru", "ruk": "Ruki", "kou": "Kou", "yum": "Yuma", "azu": "Azusa",
 }
+
+
+const ROUTES := ["prologue", "Dark", "Maniac", "Ecstasy", "ED", "Heaven", "After"]
+
+
+## Gives a number that puts the routes in order: the prologue first, then
+## each character with its routes in the order of the game.
+func _route_rank(c: Dictionary) -> int:
+	var character := NAMES.keys().find(c.character) + 1
+	var route := ROUTES.find(c.route)
+	return character * 100 + (route if route >= 0 else 99)
 
 
 func _route_title(c: Dictionary) -> String:
