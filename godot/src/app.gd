@@ -23,6 +23,14 @@ func _ready() -> void:
 	apply_window()
 
 
+## A phone can stop the app in the background with no warning, so the
+## profile is saved when the app goes to the background.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if root != "":
+			save_profile()
+
+
 ## Gives a setting. A missing setting gives the default.
 func setting(key: String, default: Variant) -> Variant:
 	return settings.get_value("player", key, default)
