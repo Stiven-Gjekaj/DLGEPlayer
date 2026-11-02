@@ -1,0 +1,119 @@
+# Builds the desktop player for macOS, Windows, and Linux.
+#
+# Each job builds the Rust library of the player, copies it and the English
+# patch into the Godot project, and exports the project with the export
+# templates of Godot. The templates are large, so a cache keeps them.
+#
+# Each action is pinned to the commit of a release, and not to a tag.
+# A tag moves.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  desktop:
+    name: ${{ matrix.preset }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            preset: macOS
+            godot: macos.universal
+          - os: windows-latest
+            preset: Windows
+            godot: win64.exe
+          - os: ubuntu-latest
+            preset: Linux
+            godot: linux.x86_64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      # The macOS app holds one library for Apple silicon and Intel.
+      - name: build the library for macOS
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          cargo build -p player --release --target aarch64-apple-darwin
+          cargo build -p player --release --target x86_64-apple-darwin
+          mkdir -p godot/bin/macos
+          lipo -create -output godot/bin/macos/libplayer.dylib \
+            target/aarch64-apple-darwin/release/libplayer.dylib \
+            target/x86_64-apple-darwin/release/libplayer.dylib
+      - name: build the library
+        if: runner.os != 'macOS'
+        run: scripts/build-player.sh release
+      - name: copy the English patch
+        run: mkdir -p godot/patch && cp assets/patch/en.dlpatch godot/patch/
+
+      - name: cache Godot
+        id: godot
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/godot
+            ~/godot-templates
+          key: godot-${{ env.GODOT_VERSION }}-${{ matrix.godot }}
+      - name: download Godot
+        if: steps.godot.outputs.cache-hit != 'true'
+        run: |
+          base=https://github.com/godotengine/godot/releases/download/$GODOT_VERSION-stable
+          mkdir -p ~/godot ~/godot-templates
+          cd ~/godot
+          curl -sSLO "$base/Godot_v$GODOT_VERSION-stable_${{ matrix.godot }}.zip"
+          curl -sSLO "$base/Godot_v$GODOT_VERSION-stable_export_templates.tpz"
+          curl -sSLO "$base/SHA512-SUMS.txt"
+          grep -E "_${{ matrix.godot }}.zip|_export_templates.tpz" SHA512-SUMS.txt | grep -v mono > sums
+          if command -v sha512sum >/dev/null; then sha512sum -c sums; else shasum -a 512 -c sums; fi
+          unzip -q "Godot_v$GODOT_VERSION-stable_${{ matrix.godot }}.zip"
+          unzip -q "Godot_v$GODOT_VERSION-stable_export_templates.tpz" -d ~/godot-templates
+          rm -f ./*.zip ./*.tpz
+      - name: install the export templates
+        run: |
+          case "$RUNNER_OS" in
+          macOS) dir="$HOME/Library/Application Support/Godot/export_templates" ;;
+          Windows) dir="$APPDATA/Godot/export_templates" ;;
+          *) dir="$HOME/.local/share/godot/export_templates" ;;
+          esac
+          mkdir -p "$dir"
+          cp -R ~/godot-templates/templates "$dir/$GODOT_VERSION.stable"
+      - name: export
+        run: |
+          case "$RUNNER_OS" in
+          macOS) godot=~/godot/Godot.app/Contents/MacOS/Godot ;;
+          Windows) godot=$(ls ~/godot/Godot_v*_win64_console.exe) ;;
+          *) godot=$(ls ~/godot/Godot_v*_linux.x86_64) ;;
+          esac
+          "$godot" --headless --path godot --import || true
+          mkdir -p godot/export/macos godot/export/windows godot/export/linux
+          "$godot" --headless --path godot --export-release "${{ matrix.preset }}"
+          ls -R godot/export
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dlge-player-${{ matrix.preset }}
+          path: godot/export
+          if-no-files-found: error
