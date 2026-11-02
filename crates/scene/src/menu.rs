@@ -8,6 +8,7 @@
 //! - the first chapter of another route opens when the last chapter of the
 //!   `Dark` route of the same character ends;
 //! - another chapter opens when the chapter before it ends;
+//! - a `Heaven` chapter follows the rules of `heaven_open`;
 //! - a chapter that ended stays open.
 
 use serde::Serialize;
@@ -77,7 +78,9 @@ pub fn chapters(program: &Program, profile: &Profile, open_all: bool) -> Vec<Cha
         let first = names.first().is_some_and(|n| n == name);
         let open = open_all
             || finished(name)
-            || if first {
+            || if route == "Heaven" {
+                heaven_open(profile, g, character, number)
+            } else if first {
                 route == "Dark"
                     || route_names(g, character, "Dark")
                         .last()
@@ -100,6 +103,46 @@ pub fn chapters(program: &Program, profile: &Profile, open_all: bool) -> Vec<Cha
         });
     }
     out
+}
+
+/// The smallest monologue score that opens a `Heaven` chapter after the
+/// first one. The game reads the sum of the correct keyword picks of the
+/// character.
+fn heaven_score(number: u32) -> i32 {
+    match number {
+        0 | 1 => 15,
+        2 => 18,
+        _ => 21,
+    }
+}
+
+/// Tells if a `Heaven` chapter is open. The rules come from the executable
+/// of the game.
+///
+/// - `ve`: chapter 0 opens when `ED_01` ends. Each later chapter needs the
+///   end of the chapter before it and a score of 15, 18, or 21.
+/// - `mb`: chapters 1 to 3 need the end of one of the `ED` chapters and a
+///   score of 15, 18, or 21.
+fn heaven_open(profile: &Profile, game: &str, character: &str, number: u32) -> bool {
+    let finished = |route: &str, n: u32| {
+        profile
+            .finished
+            .contains(&format!("{game}_{character}_{route}_{n:02}"))
+    };
+    let score: i32 = profile
+        .monologue
+        .iter()
+        .filter(|(name, _)| split(name).is_some_and(|(g, c, _, _)| g == game && c == character))
+        .map(|(_, score)| score)
+        .sum();
+    if game == "ve" {
+        if number == 0 {
+            return finished("ED", 1);
+        }
+        finished("Heaven", number - 1) && score >= heaven_score(number)
+    } else {
+        (1..=3).any(|n| finished("ED", n)) && score >= heaven_score(number)
+    }
 }
 
 /// Gives the chapter after a chapter in its route.

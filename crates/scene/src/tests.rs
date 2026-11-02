@@ -488,3 +488,88 @@ fn picks_the_keywords_of_a_monologue() {
         .collect();
     assert_eq!(rest, ["After"]);
 }
+
+#[test]
+fn opens_heaven_chapters_with_the_monologue_score() {
+    let mut program = Program::empty();
+    for (number, name) in [
+        (200, "ve_aya_ED_01"),
+        (201, "ve_aya_Heaven_00"),
+        (202, "ve_aya_Heaven_01"),
+        (203, "ve_aya_Heaven_02"),
+        (300, "mb_aya_ED_02"),
+        (301, "mb_aya_Heaven_01"),
+        (302, "mb_aya_Heaven_03"),
+    ] {
+        program.numbers.insert((0, number), name.into());
+    }
+    let open = |profile: &Profile| -> Vec<String> {
+        menu::chapters(&program, profile, false)
+            .into_iter()
+            .filter(|c| c.route == "Heaven" && c.open)
+            .map(|c| c.name)
+            .collect()
+    };
+    let mut profile = Profile::default();
+    assert!(open(&profile).is_empty());
+
+    profile.finished.insert("ve_aya_ED_01".into());
+    profile.finished.insert("mb_aya_ED_02".into());
+    assert_eq!(open(&profile), ["ve_aya_Heaven_00"]);
+
+    // 15 points of the same character open the next chapter. The points
+    // of another character or of the other game do not count.
+    for (chapter, score) in [
+        ("ve_aya_Dark_07", 2),
+        ("ve_aya_Dark_08", 2),
+        ("ve_aya_Maniac_07", 2),
+        ("ve_aya_Maniac_08", 2),
+        ("ve_aya_Ecstasy_07", 2),
+        ("ve_aya_Ecstasy_08", 2),
+        ("ve_aya_Ecstasy_09", 2),
+        ("ve_kan_Dark_07", 2),
+        ("mb_aya_Dark_07", 2),
+    ] {
+        profile.monologue.insert(chapter.into(), score);
+    }
+    assert_eq!(open(&profile), ["ve_aya_Heaven_00"]);
+    profile.monologue.insert("ve_aya_Ecstasy_10".into(), 1);
+    profile.finished.insert("ve_aya_Heaven_00".into());
+    assert_eq!(open(&profile), ["ve_aya_Heaven_00", "ve_aya_Heaven_01"]);
+
+    // Heaven_02 needs 18 points and the end of Heaven_01.
+    profile.finished.insert("ve_aya_Heaven_01".into());
+    assert_eq!(open(&profile), ["ve_aya_Heaven_00", "ve_aya_Heaven_01"]);
+    profile.monologue.insert("ve_aya_Dark_09".into(), 2);
+    profile.monologue.insert("ve_aya_Dark_10".into(), 1);
+    assert_eq!(open(&profile).len(), 3);
+
+    // MORE,BLOOD needs an ED chapter and the points, not the chapter
+    // before.
+    for n in 7..=10 {
+        profile.monologue.insert(format!("mb_aya_Dark_{n:02}"), 2);
+        profile.monologue.insert(format!("mb_aya_Maniac_{n:02}"), 2);
+    }
+    let mb: Vec<String> = open(&profile)
+        .into_iter()
+        .filter(|n| n.starts_with("mb"))
+        .collect();
+    assert_eq!(mb, ["mb_aya_Heaven_01"]);
+    for n in 7..=10 {
+        profile
+            .monologue
+            .insert(format!("mb_aya_Ecstasy_{n:02}"), 1);
+    }
+    let mb: Vec<String> = open(&profile)
+        .into_iter()
+        .filter(|n| n.starts_with("mb"))
+        .collect();
+    assert_eq!(mb, ["mb_aya_Heaven_01"]);
+    // 21 points open Heaven_03.
+    profile.monologue.insert("mb_aya_Ecstasy_10".into(), 2);
+    let mb: Vec<String> = open(&profile)
+        .into_iter()
+        .filter(|n| n.starts_with("mb"))
+        .collect();
+    assert_eq!(mb, ["mb_aya_Heaven_01", "mb_aya_Heaven_03"]);
+}
