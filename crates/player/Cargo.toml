@@ -12,6 +12,9 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+mp4 = "0.14.0"
+openh264 = "0.9.9"
+symphonia = { version = "0.5.4", default-features = false, features = ["aac", "isomp4"] }
 godot = { version = "0.5.5", features = ["api-4-7"] }
 scene.workspace = true
 serde = "1"

@@ -9,6 +9,7 @@ use std::path::Path;
 use godot::prelude::*;
 use scene::{Assets, Director, Event, Profile, SaveFile, menu};
 
+pub mod movie;
 mod value;
 
 struct Extension;
@@ -358,4 +359,86 @@ impl DlPlayer {
 fn read_save(path: &str) -> Result<SaveFile, String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     serde_json::from_str(&text).map_err(|e| e.to_string())
+}
+
+/// A movie for GDScript. `advance` decodes the pictures up to a time, and
+/// `image` gives the last picture.
+#[derive(GodotClass)]
+#[class(base = RefCounted, init)]
+pub struct DlMovie {
+    movie: Option<movie::Movie>,
+}
+
+#[godot_api]
+impl DlMovie {
+    /// Opens a movie file. Gives an empty text, or the error.
+    #[func]
+    fn open(&mut self, path: GString) -> GString {
+        match movie::Movie::open(Path::new(&path.to_string())) {
+            Ok(m) => {
+                self.movie = Some(m);
+                GString::new()
+            }
+            Err(e) => GString::from(&e),
+        }
+    }
+
+    /// Decodes the pictures up to the time in seconds. Gives true when the
+    /// picture changed.
+    #[func]
+    fn advance(&mut self, seconds: f64) -> bool {
+        match &mut self.movie {
+            Some(m) => m.advance(seconds).unwrap_or_else(|e| {
+                godot_warn!("movie: {e}");
+                false
+            }),
+            None => false,
+        }
+    }
+
+    #[func]
+    fn finished(&self) -> bool {
+        self.movie.as_ref().is_none_or(|m| m.finished())
+    }
+
+    #[func]
+    fn duration(&self) -> f64 {
+        self.movie.as_ref().map(|m| m.duration()).unwrap_or(0.0)
+    }
+
+    /// Gives the last picture.
+    #[func]
+    fn image(&self) -> Option<Gd<godot::classes::Image>> {
+        let m = self.movie.as_ref()?;
+        godot::classes::Image::create_from_data(
+            m.width as i32,
+            m.height as i32,
+            false,
+            godot::classes::image::Format::RGB8,
+            &PackedByteArray::from(m.rgb.as_slice()),
+        )
+    }
+
+    /// Gives the sound of a movie file, or null when the movie has no sound.
+    #[func]
+    fn sound(path: GString) -> Option<Gd<godot::classes::AudioStreamWav>> {
+        let sound = match movie::decode_sound(Path::new(&path.to_string())) {
+            Ok(Some(s)) => s,
+            Ok(None) => return None,
+            Err(e) => {
+                godot_warn!("movie sound: {e}");
+                return None;
+            }
+        };
+        let mut bytes = Vec::with_capacity(sound.samples.len() * 2);
+        for s in &sound.samples {
+            bytes.extend_from_slice(&s.to_le_bytes());
+        }
+        let mut stream = godot::classes::AudioStreamWav::new_gd();
+        stream.set_format(godot::classes::audio_stream_wav::Format::FORMAT_16_BITS);
+        stream.set_stereo(sound.channels > 1);
+        stream.set_mix_rate(sound.rate as i32);
+        stream.set_data(&PackedByteArray::from(bytes.as_slice()));
+        Some(stream)
+    }
 }
