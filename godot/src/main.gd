@@ -7,6 +7,9 @@ const GAMES := {"ve": "Haunted Dark Bridal", "mb": "MORE,BLOOD"}
 var current: Control
 var game: GameScreen
 var overlay: Control
+var _last_back := -1000
+
+const BACK_REPEAT_MS := 200
 
 
 func _ready() -> void:
@@ -47,6 +50,12 @@ func _notification(what: int) -> void:
 ## The back button of Android: it closes a menu, opens the settings in a
 ## chapter, or goes to the title.
 func _go_back() -> void:
+	# Godot 4.7 on Android 16 sends two requests for one press of the
+	# button. The second request comes some milliseconds after the first.
+	var now := Time.get_ticks_msec()
+	if now - _last_back < BACK_REPEAT_MS:
+		return
+	_last_back = now
 	if overlay:
 		close_overlay()
 	elif game:
