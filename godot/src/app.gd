@@ -86,7 +86,12 @@ func image(file: String) -> Image:
 		return null
 	if _images.has(file):
 		return _images[file]
-	var img := Image.load_from_file(path(file))
+	var full := path(file)
+	# An import with smaller files writes WebP images. The screens name
+	# some UI images as PNG, so the loader tries the WebP file too.
+	if not FileAccess.file_exists(full) and file.get_extension() == "png":
+		full = path(file.get_basename() + ".webp")
+	var img := Image.load_from_file(full)
 	if img == null:
 		push_warning("cannot load " + file)
 		return null
