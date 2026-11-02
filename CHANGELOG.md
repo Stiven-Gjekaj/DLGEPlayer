@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- The Godot player plays both games. It shows the message window of each
+  game, the speaker, the sprites with blinks and lip sync, the heroine face,
+  the backgrounds, the event images, the effects, and the choices. It plays
+  the music, the loop sounds, the sound effects, and the voices.
+- The player has a title screen for each game, a chapter menu, 60 save
+  slots for each game, a backlog with voices, auto and skip modes, a
+  gallery, a music room, and settings.
+- The `scene` crate turns the commands of the VM into events. All 706
+  chapters play to their end through it, and each name resolves to a file.
+- A chapter from the menu starts with the last background of the chapter
+  before it.
+- The player decodes the 9 MP4 movies with `openh264` and `symphonia`,
+  with no FFmpeg. 7 of them use B-frames.
+- The first start screen imports the NSP with the keys, in the app, with
+  half of the CPU cores. The English patch ships inside the app.
+- `dlplayer trace` prints each command of each run of a chapter.
+- `docs/opcodes.md` gives the meanings of the display opcodes from the
+  traces, and `docs/player.md` describes the player.
+- The CI exports the player for macOS, Windows, and Linux.
+- The `chara` crate holds the sprite layouts and the name resolver.
 - The `vm` crate runs the script IR with no screen. It queues the commands
   of each run, plays the flag writes in order, asks the host at each
   choice, and follows the label and script jumps. A save holds the state
