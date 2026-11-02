@@ -150,7 +150,11 @@ With the movie writer of Godot, they save pictures of the screen:
         --folder imported --chapter mb_aya_Dark_01 --click 1.5
 
 `godot/tests/smoke.gd` plays a chapter with no screen.
+`godot/tests/save.gd` saves in a chapter, loads the save, and compares the
+messages after the load with the messages after the save.
 `godot/tests/import.gd` runs the import of the first start with no screen.
+Use the release library for an import. The debug library converts the
+images many times more slowly.
 
 ## Export
 
