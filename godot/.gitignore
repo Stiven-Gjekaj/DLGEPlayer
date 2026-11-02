@@ -2,7 +2,8 @@
 /.godot/
 # A build script copies the Rust library here.
 /bin/
-# Export output.
-/export/
+# Export output. The .gdignore file stops the editor from importing it.
+/export/*
+!/export/.gdignore
 # A build script copies the English patch here.
 /patch/
