@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 bea.workspace = true
 bntx.workspace = true
+chara.workspace = true
 cpk.workspace = true
 cridecoder = "0.3.7"
 libwebp-sys = { version = "0.14.4", default-features = false, features = ["std"] }
