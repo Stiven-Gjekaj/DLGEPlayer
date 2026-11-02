@@ -118,7 +118,10 @@ The screen is 1920 by 1080. Godot scales it to the window.
 - A sprite is the body and an eye patch and a mouth patch of one sheet. The
   eyes blink. The mouth follows the lip sync keys while the voice plays.
 - The text uses a font of the system with Japanese characters, for example
-  Hiragino Mincho on macOS and Yu Mincho on Windows.
+  Hiragino Mincho on macOS and Yu Mincho on Windows. The size is 48. A
+  message with a line that is wider than the box gets a smaller size.
+- The player removes the keyword marks, such as `#KW_T1[5]`, and keeps the
+  words between them.
 
 ## Controls
 

@@ -181,7 +181,13 @@ Each entry gives the reason.
   `Dark` route. Reason: the menu of the game is Lua bytecode, and the
   player does not run it. The setting "Open all chapters" opens all.
 - **The text uses a font of the system.** Reason: the game font is a
-  bitmap font of the console (`font/main.bffnt`). Phase 8 can convert it.
+  bitmap font of the console (`font/main.bffnt`), and the system font has
+  each character of the shown text in both languages.
+- **A message with a line that is too wide gets a smaller font.** Reason:
+  the English patch breaks the lines for the font of the game. 713 long
+  lines are wider than the message box at size 48. A smaller font keeps
+  the breaks of the translators. A new wrap breaks a line in a different
+  place.
 - **The player decodes the MP4 movies itself: `mp4` reads the samples,
   `openh264` decodes H.264, and `symphonia` decodes AAC.** Reason: Godot
   plays only Ogg Theora, and the importer must not need FFmpeg. 7 of the 9

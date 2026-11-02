@@ -13,7 +13,7 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 | 5 | Make the VM. It runs the IR with no screen. It keeps flags, globals, saves, and choices. | Each route runs from start to end with no screen. A report shows the coverage. Done. |
 | 6 | Make the desktop player with Godot 4 and gdext: text box, backlog, choices, images, audio, transitions, launcher, saves for each game, gallery, and settings. | Both games play on macOS, Windows, and Linux. Done on macOS. The CI exports Windows and Linux. |
 | 7 | Make the mobile player: touch controls, import on the device, and a small storage size. | Both games play on Android and iOS. Done on an Android 16 emulator. The iOS app builds, but nobody has run it yet. |
-| 8 | Apply the English patch: put the patch files over the dump, and map the text encoding and the font. | The English text shows in the player. |
+| 8 | Apply the English patch: put the patch files over the dump, and map the text encoding and the font. | The English text shows in the player. Done on macOS. The import applies the patch, the player removes the name and keyword marks, and each line fits the message box. |
 
 ## Platforms
 
@@ -49,8 +49,10 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
    chapters in order from its own record of finished chapters. The rules of
    the game can differ.
 6. The English patch uses name tokens such as `#Name[2]`. The player puts
-   the names of the settings in their place. Some characters need the font
-   of the game. Phase 8 must map them.
+   the names of the settings in their place. The game shows a keyword
+   between `#KW_F[]`, `#KW_T1[5]`, or `#KW_T2[5]` and `#KW_ED[]` with an
+   effect that is not known. The player shows the words with no effect.
+   One English line ends with the mark `#n`, which is a fault of the patch.
 7. The Windows and Linux builds come from CI. Nobody has played them on
    those systems yet.
 8. The iOS template of Godot 4.7.2 has only x86_64 code for the

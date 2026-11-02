@@ -461,6 +461,15 @@ In the patch that we examined, 137520 actions have the opcode `0x4ba`.
 The text is Shift-JIS. It is mostly ASCII, with some Shift-JIS punctuation
 such as `’` and `ー`. It has name tokens such as `#Name[2]`.
 
+Both languages mark keywords. A keyword starts with `#KW_F[]`,
+`#KW_T1[5]`, or `#KW_T2[5]`, and ends with `#KW_ED[]`. The Japanese text
+puts the keyword between the marks. The English text puts only `｡`
+between the marks, where the line needs a space. 576 lines have a keyword.
+
+The characters of the shown text are in the font of the system. The other
+rare characters, for example `ﾄ` and single kanji, are in the arguments of
+engine actions, not in the shown text.
+
 ## Known open items
 
 - The formats `0x1505`, `0x201`, and `0x1905` in `System.bea`.
@@ -476,5 +485,6 @@ such as `’` and `ー`. It has name tokens such as `#Name[2]`.
   shows a different glyph for these characters. This is not verified.
 - `op_ff14` has 12 bytes of data that no parameter points to.
 - The meaning of most opcodes is not known yet.
-- The name tokens of the English patch, such as `#Name[2]`, are not
-  decoded yet.
+- The effect of the keyword marks is not known. The executable holds the
+  strings `#KW_F[]`, `#KW_T1[5]`, and `#KW_T2[5]`, but no code refers to
+  them directly.

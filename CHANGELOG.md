@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The player removes the keyword marks, such as `#KW_T1[5]`, from the
+  text. In the English text, a keyword mark gives a space.
+- A message with a line that is too wide for the message box gets a
+  smaller font, so the English text stays in the window.
 - The player runs on Android and iOS. A tap shows the next message, a
   long press hides the message window, a swipe down opens the backlog, and
   the back button of Android closes a menu.

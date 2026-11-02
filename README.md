@@ -101,7 +101,6 @@ Planned:
 
 - Play the iOS build on a device or in the simulator
   ([phase 7](docs/roadmap.md))
-- The font of the game ([phase 8](docs/roadmap.md))
 
 ## You need a copy of the game
 
