@@ -4,3 +4,5 @@
 /bin/
 # Export output.
 /export/
+# A build script copies the English patch here.
+/patch/

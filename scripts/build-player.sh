@@ -23,3 +23,6 @@ mkdir -p "godot/bin/$dir"
 rm -f "godot/bin/$dir/$file"
 cp "target/$profile/$file" "godot/bin/$dir/$file"
 echo "copied target/$profile/$file to godot/bin/$dir"
+# The English patch ships with the player. The export reads it from here.
+mkdir -p godot/patch
+cp assets/patch/en.dlpatch godot/patch/en.dlpatch

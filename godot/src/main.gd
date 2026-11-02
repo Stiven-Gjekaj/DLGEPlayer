@@ -94,40 +94,127 @@ func _column(parent: Control, at: Vector2, width: float) -> VBoxContainer:
 	return box
 
 
-# The first start: the player gives the import folder.
+# The first start: the player gives the NSP file and the keys, or a
+# folder that an earlier import made.
+
+const PATCH := "res://patch/en.dlpatch"
+
+var _setup := {"input": "", "keys": "", "out": ""}
+
 
 func show_setup(message: String = "") -> void:
+	if _setup.out == "":
+		_setup.out = OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS).path_join("DLGE Player")
 	var s := Ui.screen(1.0)
-	var box := _column(s, Vector2(260, 140), 1400)
+	var box := _column(s, Vector2(200, 80), 1520)
 	box.add_child(Ui.label("DLGE Player", 72, Ui.GOLD))
 	var text := Ui.label(
-		"The player reads a folder that the importer makes from your own copy of the game.\n"
-		+ "Make the folder with your NSP file and your prod.keys file:\n\n"
-		+ "    dlplayer import <game.nsp> <folder> --keys prod.keys --translation en.dlpatch\n\n"
-		+ "Then select the folder here. After the import, you can delete the NSP file and\n"
-		+ "the keys. The player does not need them again.", 32)
+		"The player reads the game from your own copy. Give the NSP file of Diabolik Lovers "
+		+ "Grand Edition and the prod.keys file of your console. The import converts the game "
+		+ "one time into a folder. After the import, you can delete the NSP file and prod.keys.", 30)
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(text)
+	_file_row(box, "Game (NSP)", "input", ["*.nsp"], FileDialog.FILE_MODE_OPEN_FILE)
+	_file_row(box, "prod.keys", "keys", ["*.keys"], FileDialog.FILE_MODE_OPEN_FILE)
+	_file_row(box, "Import folder", "out", [], FileDialog.FILE_MODE_OPEN_DIR)
+	var english := CheckBox.new()
+	english.text = "English translation"
+	english.button_pressed = FileAccess.file_exists(PATCH)
+	english.disabled = not FileAccess.file_exists(PATCH)
+	english.add_theme_font_size_override("font_size", 32)
+	box.add_child(english)
+	var small := CheckBox.new()
+	small.text = "Smaller files (WebP images, lower audio quality)"
+	small.add_theme_font_size_override("font_size", 32)
+	box.add_child(small)
 	if message != "":
-		box.add_child(Ui.label(message, 30, Color(1, 0.5, 0.5)))
-	box.add_child(Ui.button("Select the import folder", _pick_folder))
-	box.add_child(Ui.button("Quit", get_tree().quit))
+		var m := Ui.label(message, 30, Color(1, 0.55, 0.55))
+		m.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(m)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 20)
+	row.add_child(Ui.button("Start the import", func():
+		if _setup.input == "" or _setup.keys == "":
+			show_setup("Select the NSP file and prod.keys first.")
+		else:
+			_run_import(english.button_pressed, small.button_pressed)))
+	row.add_child(Ui.button("Open an import folder", func():
+		_pick(FileDialog.FILE_MODE_OPEN_DIR, [], func(dir: String):
+			var error := App.open_import(dir)
+			if error == "":
+				show_title()
+			else:
+				show_setup(error))))
+	row.add_child(Ui.button("Quit", get_tree().quit))
+	box.add_child(row)
 	_switch(s)
 
 
-func _pick_folder() -> void:
+func _file_row(box: VBoxContainer, title: String, key: String, filters: Array, mode: FileDialog.FileMode) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 20)
+	var name := Ui.label(title, 32, Ui.GOLD)
+	name.custom_minimum_size = Vector2(280, 0)
+	row.add_child(name)
+	row.add_child(Ui.button("Select", func():
+		_pick(mode, filters, func(path: String):
+			_setup[key] = path
+			show_setup()), 28))
+	var value := Ui.label(_setup[key] if _setup[key] != "" else "(none)", 26)
+	value.clip_text = true
+	value.custom_minimum_size = Vector2(1000, 0)
+	row.add_child(value)
+	box.add_child(row)
+
+
+func _pick(mode: FileDialog.FileMode, filters: Array, done: Callable) -> void:
 	var dialog := FileDialog.new()
-	dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+	dialog.file_mode = mode
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
 	dialog.use_native_dialog = true
-	dialog.dir_selected.connect(func(dir: String):
-		var error := App.open_import(dir)
-		if error == "":
-			show_title()
-		else:
-			show_setup(error))
+	dialog.filters = PackedStringArray(filters)
+	dialog.file_selected.connect(done)
+	dialog.dir_selected.connect(done)
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(1200, 800))
+
+
+func _run_import(english: bool, small: bool) -> void:
+	var s := Ui.screen(1.0)
+	var box := _column(s, Vector2(200, 80), 1520)
+	box.add_child(Ui.label("Importing", 64, Ui.GOLD))
+	var status := Ui.label("This takes some minutes. The player uses half of the CPU cores.", 30)
+	box.add_child(status)
+	var log := Ui.label("", 26)
+	log.custom_minimum_size = Vector2(1500, 700)
+	log.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	log.clip_text = true
+	box.add_child(log)
+	_switch(s)
+	var importer := DlImporter.new()
+	var patch := FileAccess.get_file_as_bytes(PATCH) if english else PackedByteArray()
+	importer.start(_setup.input, _setup.keys, _setup.out, patch, small, 0)
+	var lines: Array[String] = []
+	var start := Time.get_ticks_msec()
+	while not importer.done():
+		await get_tree().create_timer(0.5).timeout
+		lines.append_array(importer.lines(lines.size()))
+		log.text = "\n".join(lines.slice(maxi(lines.size() - 22, 0)))
+		status.text = "%d s" % ((Time.get_ticks_msec() - start) / 1000)
+	lines.append_array(importer.lines(lines.size()))
+	var error: String = importer.error()
+	if error != "":
+		show_setup("The import failed: " + error)
+		return
+	error = App.open_import(_setup.out)
+	if error != "":
+		show_setup(error)
+		return
+	status.text = ("The import is complete. You can delete the NSP file and prod.keys now. "
+		+ "The player does not need them again.")
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.custom_minimum_size = Vector2(1500, 0)
+	box.add_child(Ui.button("Continue", show_title))
 
 
 # The title screen.
