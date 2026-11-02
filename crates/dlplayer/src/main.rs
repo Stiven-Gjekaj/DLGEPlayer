@@ -97,6 +97,16 @@ enum Command {
         #[arg(long)]
         report: Option<PathBuf>,
     },
+    /// Run one chapter with no screen and print each command of each run.
+    Trace {
+        /// The import folder.
+        folder: PathBuf,
+        /// The script name, for example mb_aya_Dark_01.
+        script: String,
+        /// The option index to pick at each choice.
+        #[arg(long, default_value_t = 0)]
+        pick: usize,
+    },
     /// Convert an HCA audio file to Ogg Vorbis.
     Audio {
         file: PathBuf,
@@ -192,6 +202,11 @@ fn main() -> ExitCode {
         Command::Table { file } => table(&file),
         Command::Layout { file, out } => layout(&file, &out),
         Command::Run { folder, report } => run_chapters(&folder, report.as_deref()),
+        Command::Trace {
+            folder,
+            script,
+            pick,
+        } => trace(&folder, &script, pick),
         Command::Audio { file, out, quality } => audio(&file, &out, quality),
         Command::Sprite {
             archives,
@@ -470,6 +485,31 @@ fn make_patch(input: &Path, patched: &Path, out: &Path, keys: Option<&Path>) -> 
         out.display()
     );
     Ok(())
+}
+
+fn trace(folder: &Path, script: &str, pick: usize) -> Result<()> {
+    struct Print(usize);
+    impl vm::session::Host for Print {
+        fn command(&mut self, command: &vm::Command) {
+            println!("  {command:?}");
+        }
+        fn choose(&mut self, _name: &str, options: &[vm::program::ChoiceOption]) -> usize {
+            self.0.min(options.len().saturating_sub(1))
+        }
+        fn choose_character(&mut self) -> i32 {
+            (self.0 % 6) as i32 + 1
+        }
+    }
+    let program = vm::Program::load(folder)?;
+    let mut session = vm::session::Session::new(&program, script, "sure1")?;
+    let mut host = Print(pick);
+    for n in 1..=5000 {
+        println!("run {n}: {} {}", session.script(), session.label());
+        if session.step(&mut host)? == vm::session::Step::End {
+            return Ok(());
+        }
+    }
+    Err("the chapter did not end".into())
 }
 
 fn run_chapters(folder: &Path, report_file: Option<&Path>) -> Result<()> {
