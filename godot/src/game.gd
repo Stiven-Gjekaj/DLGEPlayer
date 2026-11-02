@@ -16,6 +16,9 @@ const FRAME := 1.0 / 60.0
 const LONG_PRESS_MS := 500
 const SWIPE := 160.0
 const TOUCH_SLOP := 40.0
+## The font size of the message text. A line that is too wide for the box
+## makes the size of its message smaller.
+const TEXT_SIZE := 48
 const ADV := "ui/%s_advUI/UI_06_1^q.png"
 
 ## The x position of the centre of a sprite for each slot of `0x480`.
@@ -144,7 +147,7 @@ func _build() -> void:
 	text_label.scroll_active = false
 	text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text_label.add_theme_font_size_override("normal_font_size", 48)
+	text_label.add_theme_font_size_override("normal_font_size", TEXT_SIZE)
 	text_label.add_theme_constant_override("line_separation", 12)
 	text_label.add_theme_constant_override("outline_size", 8)
 	text_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
@@ -599,6 +602,20 @@ func _speaking_figure(character: String) -> Figure:
 	return null
 
 
+## Gives the largest font size, up to TEXT_SIZE, that shows each line of a
+## message on one line. The English lines have breaks for the font of the
+## game, and some of them are too wide for the font of the player.
+func _text_size(lines: Array) -> int:
+	var font := text_label.get_theme_font("normal_font")
+	var widest := 0.0
+	for line in lines:
+		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE).x)
+	var room := text_label.size.x - 4.0
+	if widest <= room:
+		return TEXT_SIZE
+	return int(TEXT_SIZE * room / widest)
+
+
 func _show_text(e: Dictionary) -> void:
 	_flush_transition()
 	if skip and not e.read and not App.setting("skip_unread", false):
@@ -608,6 +625,7 @@ func _show_text(e: Dictionary) -> void:
 	plate.visible = name != ""
 	name_label.text = name
 	text_label.text = "\n".join(e.lines)
+	text_label.add_theme_font_size_override("normal_font_size", _text_size(e.lines))
 	next_mark.visible = false
 	_set_window(true)
 	if e.voice and not _skipping():
