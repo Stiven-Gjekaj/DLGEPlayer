@@ -148,7 +148,6 @@ func _build() -> void:
 	next_mark.add_theme_color_override("font_color", Ui.GOLD)
 	window.add_child(next_mark)
 
-	choices.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	choices.position = Vector2(410, 260)
 	choices.size = Vector2(1100, 400)
 	choices.alignment = BoxContainer.ALIGNMENT_CENTER
