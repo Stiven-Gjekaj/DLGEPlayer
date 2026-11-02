@@ -303,3 +303,30 @@ fn reports_problems() {
         Err(crate::Error::UnknownLabel(..))
     ));
 }
+
+#[test]
+fn plays_one_command_at_a_time() {
+    // A screen calls run, play, and finish. The result must be the same as
+    // with step.
+    let program = chapter();
+    let mut session = Session::new(&program, "test_ch01", "sure1").unwrap();
+    let mut host = Record {
+        pick: 1,
+        commands: vec![],
+        asked: vec![],
+    };
+    let mut steps = 0;
+    loop {
+        steps += 1;
+        let commands = session.run().unwrap();
+        for command in &commands {
+            session.play(command, &mut host).unwrap();
+        }
+        if session.finish(commands.is_empty()).unwrap() == Step::End {
+            break;
+        }
+    }
+    assert_eq!(steps, 4);
+    assert_eq!(messages(&host.commands), ["part one", "which?", "answer B"]);
+    assert_eq!(session.flags.script["select"], 1);
+}

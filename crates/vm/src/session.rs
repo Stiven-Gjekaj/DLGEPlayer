@@ -79,6 +79,10 @@ pub struct Session<'p> {
     idle: u32,
     /// The instructions that ran in the scripts before the current one.
     earlier: BTreeMap<String, Vec<bool>>,
+    /// The label or the script that the current run goes to.
+    next: Option<(Option<i32>, String)>,
+    /// The current run ends the chapter.
+    end: bool,
 }
 
 impl<'p> Session<'p> {
@@ -105,6 +109,8 @@ impl<'p> Session<'p> {
             flags,
             idle: 0,
             earlier: BTreeMap::new(),
+            next: None,
+            end: false,
         })
     }
 
@@ -119,6 +125,8 @@ impl<'p> Session<'p> {
             flags: save.flags,
             idle: 0,
             earlier: BTreeMap::new(),
+            next: None,
+            end: false,
         })
     }
 
@@ -149,48 +157,68 @@ impl<'p> Session<'p> {
 
     /// Runs the label and plays its commands.
     pub fn step(&mut self, host: &mut dyn Host) -> Result<Step, Error> {
-        let commands = self.machine.run(&self.label, &self.flags)?;
-        let mut next: Option<(Option<i32>, String)> = None;
-        let mut end = false;
+        let commands = self.run()?;
         for command in &commands {
-            host.command(command);
-            match command {
-                Command::SetFlag { name, value } => {
-                    self.flags.script.insert(name.clone(), *value);
-                }
-                Command::AddFlag { name, value } => {
-                    *self.flags.script.entry(name.clone()).or_insert(0) += value;
-                }
-                Command::SetSystemFlag { name, value } => {
-                    self.flags.system.insert(name.clone(), *value);
-                }
-                Command::Choice { name } => {
-                    let options = self
-                        .program
-                        .choices
-                        .get(name)
-                        .ok_or_else(|| Error::UnknownChoice(name.clone()))?;
-                    let pick = host
-                        .choose(name, options)
-                        .min(options.len().saturating_sub(1));
-                    self.flags.script.insert("select".into(), pick as i32);
-                }
-                Command::JumpLabel(label) => next = Some((None, label.clone())),
-                Command::JumpScript { number, label } => {
-                    next = Some((Some(*number), label.clone()))
-                }
-                Command::SelectCharacter => {
-                    let pick = host.choose_character();
-                    self.flags.script.insert("character".into(), pick);
-                }
-                Command::End | Command::Finish => end = true,
-                _ => {}
-            }
+            self.play(command, host)?;
         }
-        if end {
+        self.finish(commands.is_empty())
+    }
+
+    /// Runs the label and gives its commands. The host plays them in order
+    /// with `play`, and then calls `finish`. A screen uses these three
+    /// functions in place of `step`, because it shows one command at a time.
+    pub fn run(&mut self) -> Result<Vec<Command>, Error> {
+        self.next = None;
+        self.end = false;
+        self.machine.run(&self.label, &self.flags)
+    }
+
+    /// Plays one command of a run: it changes the flags, asks the host for
+    /// a pick, or records what runs next.
+    pub fn play(&mut self, command: &Command, host: &mut dyn Host) -> Result<(), Error> {
+        host.command(command);
+        match command {
+            Command::SetFlag { name, value } => {
+                self.flags.script.insert(name.clone(), *value);
+            }
+            Command::AddFlag { name, value } => {
+                *self.flags.script.entry(name.clone()).or_insert(0) += value;
+            }
+            Command::SetSystemFlag { name, value } => {
+                self.flags.system.insert(name.clone(), *value);
+            }
+            Command::Choice { name } => {
+                let options = self
+                    .program
+                    .choices
+                    .get(name)
+                    .ok_or_else(|| Error::UnknownChoice(name.clone()))?;
+                let pick = host
+                    .choose(name, options)
+                    .min(options.len().saturating_sub(1));
+                self.flags.script.insert("select".into(), pick as i32);
+            }
+            Command::JumpLabel(label) => self.next = Some((None, label.clone())),
+            Command::JumpScript { number, label } => {
+                self.next = Some((Some(*number), label.clone()))
+            }
+            Command::SelectCharacter => {
+                let pick = host.choose_character();
+                self.flags.script.insert("character".into(), pick);
+            }
+            Command::End | Command::Finish => self.end = true,
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Decides what runs after a run. `empty` tells that the run made no
+    /// command.
+    pub fn finish(&mut self, empty: bool) -> Result<Step, Error> {
+        if self.end {
             return Ok(Step::End);
         }
-        match next {
+        match self.next.take() {
             Some((None, label)) => self.label = label,
             Some((Some(number), label)) => {
                 let game = self.program.games.get(self.script()).copied().unwrap_or(0);
@@ -206,11 +234,7 @@ impl<'p> Session<'p> {
             }
             None => {}
         }
-        self.idle = if commands.is_empty() {
-            self.idle + 1
-        } else {
-            0
-        };
+        self.idle = if empty { self.idle + 1 } else { 0 };
         if self.idle >= IDLE_LIMIT {
             return Err(Error::Stuck(self.script().to_string(), self.label.clone()));
         }
