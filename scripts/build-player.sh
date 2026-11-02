@@ -17,5 +17,9 @@ Linux) dir=linux; file=libplayer.so ;;
 *) dir=windows; file=player.dll ;;
 esac
 mkdir -p "godot/bin/$dir"
+# Remove the old file first. On macOS, a copy over a library that a
+# program has open changes the file in place, and the system then stops
+# each new program that loads it.
+rm -f "godot/bin/$dir/$file"
 cp "target/$profile/$file" "godot/bin/$dir/$file"
 echo "copied target/$profile/$file to godot/bin/$dir"
