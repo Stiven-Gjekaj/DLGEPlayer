@@ -11,6 +11,11 @@ signal finished(next: String)
 signal menu_requested(kind: String)
 
 const FRAME := 1.0 / 60.0
+## The touch gestures, in milliseconds and in pixels of the 1920 by 1080
+## screen.
+const LONG_PRESS_MS := 500
+const SWIPE := 160.0
+const TOUCH_SLOP := 40.0
 const ADV := "ui/%s_advUI/UI_06_1^q.png"
 
 ## The x position of the centre of a sprite for each slot of `0x480`.
@@ -63,6 +68,8 @@ var transition_frames := 0
 var _clicks := 0
 var _pick := -1
 var _skip_held := false
+var _touch_start := Vector2.ZERO
+var _touch_time := 0
 
 
 func _ready() -> void:
@@ -156,12 +163,12 @@ func _build() -> void:
 	_full(spot_layer)
 	add_child(spot_layer)
 
-	bar.position = Vector2(860, 8)
-	bar.size = Vector2(1052, 56)
+	bar.position = Vector2(760, 8)
+	bar.size = Vector2(1152, 56)
 	bar.alignment = BoxContainer.ALIGNMENT_END
 	bar.add_theme_constant_override("separation", 6)
 	for item in [
-		["Auto", _toggle_auto], ["Skip", _toggle_skip], ["Log", menu_requested.emit.bind("backlog")],
+		["Hide", _toggle_window], ["Auto", _toggle_auto], ["Skip", _toggle_skip], ["Log", menu_requested.emit.bind("backlog")],
 		["Save", menu_requested.emit.bind("save")], ["Load", menu_requested.emit.bind("load")],
 		["Config", menu_requested.emit.bind("settings")], ["Title", menu_requested.emit.bind("title")],
 	]:
@@ -479,19 +486,54 @@ func _set_window(visible_now: bool) -> void:
 	bar.visible = not user_hidden
 
 
+func _tap() -> void:
+	if user_hidden:
+		user_hidden = false
+		_set_window(window_wanted)
+	else:
+		_clicks += 1
+
+
+func _toggle_window() -> void:
+	user_hidden = not user_hidden
+	_set_window(window_wanted)
+
+
+## Touch: a tap is a left click, a long press hides the message window,
+## and a swipe down opens the backlog. Godot also makes a mouse event from
+## each touch. The screen ignores that event.
+func _touch(event: InputEventScreenTouch) -> void:
+	if event.index != 0:
+		return
+	if event.pressed:
+		_touch_start = event.position
+		_touch_time = Time.get_ticks_msec()
+		return
+	var moved := event.position - _touch_start
+	if moved.y > SWIPE and absf(moved.x) < moved.y:
+		menu_requested.emit("backlog")
+	elif moved.length() < TOUCH_SLOP:
+		if Time.get_ticks_msec() - _touch_time >= LONG_PRESS_MS:
+			_toggle_window()
+		else:
+			_tap()
+
+
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		_touch(event)
+		accept_event()
+		return
 	if event is InputEventMouseButton and event.pressed:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			accept_event()
+			return
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
-				if user_hidden:
-					user_hidden = false
-					_set_window(window_wanted)
-				else:
-					_clicks += 1
+				_tap()
 				accept_event()
 			MOUSE_BUTTON_RIGHT:
-				user_hidden = not user_hidden
-				_set_window(window_wanted)
+				_toggle_window()
 				accept_event()
 			MOUSE_BUTTON_WHEEL_UP:
 				menu_requested.emit("backlog")
