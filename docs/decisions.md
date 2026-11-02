@@ -156,3 +156,55 @@ Each entry gives the reason.
   phone can close the app during an import of several minutes. The journal
   gets one line after each item is written, so a half-written file is
   converted again.
+
+## The player
+
+- **The `scene` crate holds the logic of the screen, with no Godot.**
+  Reason: tests can play every chapter through it, and a later frontend
+  can use it.
+- **Each event goes to GDScript as a `Dictionary` through JSON values.**
+  Reason: one conversion serves all events, and an event gets a new field
+  with no change to the extension.
+- **A save holds the state at the start of the run and the index of the
+  current command.** A load runs the label again to that index. Reason:
+  a run gives the same commands from the same state, so the save needs no
+  copy of the commands.
+- **A chapter from the menu starts with the last background of the chapter
+  before it.** Reason: most chapters show no background before their first
+  message. In the game, the background of the chapter before stays on the
+  screen.
+- **The player records the finished chapters itself.** Reason: the system
+  flags for the end of a chapter have other names than the scripts, for
+  example `aya_Dark00_end` and `ayato_dark_01_end`.
+- **The chapter menu opens the chapters in order.** The first chapter of
+  each `Dark` route is open. The other routes open after the end of the
+  `Dark` route. Reason: the menu of the game is Lua bytecode, and the
+  player does not run it. The setting "Open all chapters" opens all.
+- **The text uses a font of the system.** Reason: the game font is a
+  bitmap font of the console (`font/main.bffnt`). Phase 8 can convert it.
+- **The player decodes the MP4 movies itself: `mp4` reads the samples,
+  `openh264` decodes H.264, and `symphonia` decodes AAC.** Reason: Godot
+  plays only Ogg Theora, and the importer must not need FFmpeg. 7 of the 9
+  movies use the Main profile with B-frames, so the decoder must not flush
+  after each sample.
+- **The `openh264` crate builds OpenH264 from source.** The patent licence
+  of Cisco covers only the binaries of Cisco. A user who needs that licence
+  can build the player with a binary of Cisco.
+- **The importer runs inside the app with half of the CPU cores.** Reason:
+  the first start needs only the NSP and the keys, and an import on all
+  cores makes the computer slow.
+- **The English patch ships inside the app as `patch/en.dlpatch`.**
+  Reason: the owner has the permission of the translators.
+- **The player gives colour to the transparent pixels at the edges of a
+  sprite sheet.** Reason: a transparent pixel is black, and the filter of
+  a scaled sprite mixes the black into the edge. Godot has
+  `Image.fix_alpha_edges`, but it takes 272 ms for a sheet. The Rust
+  function takes 46 ms.
+- **These meanings are guesses from the traces, not from the code of the
+  game:** the slots of `0x480`, the colours of `0x488`, the order of the
+  characters of `0x6fe`, and the time unit of `0x3fb`. Reason: the game
+  queues these commands, and the code that plays them is behind tables of
+  functions that the analysis did not follow.
+- **The library file is removed before the build script copies a new
+  one.** Reason: on macOS, a copy over a library that a program has open
+  changes the file in place, and each new program that loads it stops.
