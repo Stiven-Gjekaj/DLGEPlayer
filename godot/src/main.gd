@@ -17,6 +17,9 @@ func _ready() -> void:
 	var args := _arguments()
 	if App.open_import(args.get("folder", "")) != "":
 		show_setup()
+	elif args.has("movie"):
+		show_title()
+		play_movie(args.movie)
 	elif args.has("chapter"):
 		App.game = String(args.chapter).left(2)
 		start_chapter(args.chapter)
@@ -150,6 +153,7 @@ func show_title() -> void:
 	cont.disabled = latest < 0
 	box.add_child(cont)
 	box.add_child(Ui.button("Load", func(): _open_overlay(_saves(false))))
+	box.add_child(Ui.button("Opening", func(): play_movie(App.game + "_op")))
 	box.add_child(Ui.button("Gallery", show_gallery))
 	box.add_child(Ui.button("Music", show_music))
 	box.add_child(Ui.button("Settings", func(): _open_overlay(_settings())))
@@ -166,6 +170,14 @@ func _latest_save() -> int:
 			best_time = int(info.time)
 			best = slot
 	return best
+
+
+## Plays a movie of the import folder by name, for example `ve_op`.
+func play_movie(name: String) -> void:
+	var view := MovieView.new()
+	add_child(view)
+	await view.play(App.path("movies/%s.mp4" % name))
+	view.queue_free()
 
 
 # The chapters.
