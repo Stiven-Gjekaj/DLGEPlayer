@@ -273,6 +273,8 @@ func _handle(e: Dictionary) -> void:
 			await _show_text(e)
 		"choice":
 			await _choice(e.options)
+		"monologue":
+			await _monologue(e.options, e.picks)
 		"select_character":
 			await _select_character()
 		"wait":
@@ -674,6 +676,51 @@ func _choice(options: Array) -> void:
 	for c in choices.get_children():
 		c.queue_free()
 	App.player.choose(_pick)
+
+
+## Shows the keyword pick at the end of a monologue. Each option is the
+## line of one keyword. The player picks `picks` of them, and each pick
+## shows if the keyword is correct.
+func _monologue(options: Array, picks: int) -> void:
+	skip = false
+	_skip_held = false
+	_update_notice()
+	for c in choices.get_children():
+		c.queue_free()
+	var place := [choices.position, choices.size]
+	choices.position = Vector2(160, 200)
+	choices.size = Vector2(1600, 560)
+	var title := Ui.label("Pick %d keywords" % picks, 40)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	choices.add_child(title)
+	var buttons: Array[Button] = []
+	for i in options.size():
+		var b := Ui.button(options[i], func(): _pick = i, 32)
+		b.custom_minimum_size = Vector2(1600, 88)
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		choices.add_child(b)
+		buttons.append(b)
+	choices.visible = true
+	var left := picks
+	while left > 0 and running:
+		_pick = -1
+		while _pick < 0 and running:
+			await get_tree().process_frame
+		if _pick < 0:
+			break
+		var correct: int = App.player.choose_keyword(_pick)
+		if correct < 0:
+			continue
+		buttons[_pick].disabled = true
+		buttons[_pick].text = ("True: " if correct == 1 else "False: ") + options[_pick]
+		left -= 1
+	if running:
+		await get_tree().create_timer(1.0).timeout
+	choices.visible = false
+	for c in choices.get_children():
+		c.queue_free()
+	choices.position = place[0]
+	choices.size = place[1]
 
 
 ## The six brothers in the order of the value of the flag `character`. The

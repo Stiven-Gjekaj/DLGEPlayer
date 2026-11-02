@@ -28,6 +28,9 @@ func _init() -> void:
 			print(event)
 		if kind == "choice":
 			player.choose(0)
+		elif kind == "monologue":
+			for pick in event.picks:
+				player.choose_keyword(pick)
 		elif kind == "select_character":
 			player.choose_character(1)
 		elif kind == "end" or kind == "error":

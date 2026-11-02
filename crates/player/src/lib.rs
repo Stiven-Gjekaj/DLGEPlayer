@@ -251,6 +251,19 @@ impl DlPlayer {
         }
     }
 
+    /// Gives one pick of a keyword pick, 0 for the first keyword. Gives 1
+    /// for a correct keyword, 0 for a wrong keyword, and -1 for an error.
+    #[func]
+    fn choose_keyword(&mut self, pick: i32) -> i32 {
+        let Some(d) = &mut self.director else {
+            return -1;
+        };
+        match usize::try_from(pick).map(|p| d.choose_keyword(p)) {
+            Ok(Ok(correct)) => correct as i32,
+            _ => -1,
+        }
+    }
+
     /// Gives the messages of the backlog, the oldest first.
     #[func]
     fn backlog(&self) -> Array<Variant> {

@@ -16,6 +16,10 @@ func _next_texts(player: DlPlayer, count: int) -> Array:
 				texts.append("choice")
 			"select_character":
 				player.choose_character(1)
+			"monologue":
+				for pick in e.picks:
+					player.choose_keyword(pick)
+				texts.append("monologue")
 			"end", "error":
 				texts.append(e.kind)
 				break

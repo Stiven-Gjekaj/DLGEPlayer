@@ -77,12 +77,20 @@ func _arguments() -> Dictionary:
 	return out
 
 
-## Clicks the game screen at a fixed interval.
+## Clicks the game screen at a fixed interval. When the game shows
+## options, it picks the first option that is not picked yet.
 func _auto_click(every: float) -> void:
 	while true:
 		await get_tree().create_timer(every).timeout
-		if game:
-			game._clicks += 1
+		if not game:
+			continue
+		game._clicks += 1
+		if game.choices.visible and game._pick < 0:
+			var buttons := game.choices.get_children().filter(func(c): return c is Button)
+			for i in buttons.size():
+				if not buttons[i].disabled:
+					game._pick = i
+					break
 
 
 func _make_buses() -> void:
