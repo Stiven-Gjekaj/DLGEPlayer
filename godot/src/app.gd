@@ -12,6 +12,8 @@ var settings := ConfigFile.new()
 var root := ""
 ## The game of the title screen: "ve" or "mb".
 var game := "ve"
+## True on Android and iOS.
+var mobile := OS.has_feature("mobile")
 
 
 func _ready() -> void:
@@ -129,6 +131,8 @@ func apply_audio() -> void:
 
 
 func apply_window() -> void:
+	if mobile:
+		return
 	if setting("fullscreen", false):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:

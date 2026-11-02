@@ -163,7 +163,9 @@ func show_setup(message: String = "") -> void:
 				show_title()
 			else:
 				show_setup(error))))
-	row.add_child(Ui.button("Quit", get_tree().quit))
+	# A phone app does not quit itself.
+	if not App.mobile:
+		row.add_child(Ui.button("Quit", get_tree().quit))
 	box.add_child(row)
 	_switch(s)
 
@@ -266,7 +268,8 @@ func show_title() -> void:
 	box.add_child(Ui.button("Gallery", show_gallery))
 	box.add_child(Ui.button("Music", show_music))
 	box.add_child(Ui.button("Settings", func(): _open_overlay(_settings())))
-	box.add_child(Ui.button("Quit", get_tree().quit))
+	if not App.mobile:
+		box.add_child(Ui.button("Quit", get_tree().quit))
 	_switch(s)
 
 
@@ -532,7 +535,8 @@ func _settings() -> Control:
 		_slider(grid, item[0], item[1], item[2], 0.0, 1.0, App.apply_audio)
 	_slider(grid, "Text speed", "text_speed", 45.0, 10.0, 200.0, func(): pass)
 	_slider(grid, "Auto wait (seconds)", "auto_delay", 1.5, 0.0, 6.0, func(): pass)
-	_check(grid, "Full screen", "fullscreen", false, App.apply_window)
+	if not App.mobile:
+		_check(grid, "Full screen", "fullscreen", false, App.apply_window)
 	_check(grid, "Skip unread text", "skip_unread", false, func(): pass)
 	_check(grid, "Stop the voice on click", "voice_stops", true, func(): pass)
 	_check(grid, "Open all chapters", "open_all", false, func(): pass)
