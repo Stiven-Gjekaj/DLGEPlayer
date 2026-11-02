@@ -349,6 +349,25 @@ fn continues_from_a_save() {
 }
 
 #[test]
+fn starts_with_the_background_of_the_chapter_before() {
+    let dir = folder("before");
+    let assets = Assets::load(&dir).unwrap();
+    let program = program();
+    let director = Director::new(&program, &assets, Profile::default(), "mb_aya_Dark_01").unwrap();
+    // The chapter before ends on the event image of the first option.
+    match &director.rebuild()[0] {
+        Event::Background { name, file, .. } => {
+            assert_eq!(name, "cg01");
+            assert_eq!(file.as_deref(), Some("images/ev/mb0010.png"));
+        }
+        e => panic!("{e:?}"),
+    }
+    // The silent run does not mark messages or images.
+    assert!(director.profile.read.is_empty());
+    assert!(director.profile.seen.is_empty());
+}
+
+#[test]
 fn marks_read_messages() {
     let dir = folder("read");
     let assets = Assets::load(&dir).unwrap();

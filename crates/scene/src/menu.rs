@@ -116,3 +116,19 @@ pub fn next_chapter(program: &Program, name: &str) -> Option<String> {
         .min()
         .cloned()
 }
+
+/// Gives the chapter before a chapter in its route.
+pub fn previous_chapter(program: &Program, name: &str) -> Option<String> {
+    let (game, character, route, number) = split(name)?;
+    let before = number.checked_sub(1)?;
+    program
+        .numbers
+        .values()
+        .filter(|n| {
+            split(n).is_some_and(|(g, c, r, m)| {
+                g == game && c == character && r == route && m == before
+            })
+        })
+        .min()
+        .cloned()
+}

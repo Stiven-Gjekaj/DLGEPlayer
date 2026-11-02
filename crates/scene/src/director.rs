@@ -365,7 +365,47 @@ fn hash(parts: &[&[u8]]) -> u64 {
 impl<'a> Director<'a> {
     /// Starts a chapter at `sure1`. The script flags have their first
     /// values. The system flags come from the profile.
+    ///
+    /// A chapter often shows no background before its first message,
+    /// because the background of the chapter before it stays on the screen.
+    /// So the director plays the chapter before it with no screen, and
+    /// starts with its last background. `rebuild` gives the events that
+    /// show it.
     pub fn new(
+        program: &'a Program,
+        assets: &'a Assets,
+        profile: Profile,
+        chapter: &str,
+    ) -> Result<Director<'a>, Error> {
+        let before = crate::menu::previous_chapter(program, chapter)
+            .and_then(|name| Director::bare(program, assets, profile.clone(), &name).ok())
+            .and_then(|mut d| d.last_scene());
+        let mut director = Director::bare(program, assets, profile, chapter)?;
+        if let Some(scene) = before {
+            director.scene.backdrop = scene.backdrop;
+            director.start.1 = director.scene.clone();
+        }
+        Ok(director)
+    }
+
+    /// Plays the chapter to its end with the first option of each choice,
+    /// and gives the scene at the end.
+    fn last_scene(&mut self) -> Option<Scene> {
+        for _ in 0..1_000_000 {
+            match self.next_event().ok()? {
+                Event::End { .. } => return Some(self.scene.clone()),
+                Event::Choice { .. } => self.choose(0).ok()?,
+                Event::SelectCharacter => {
+                    let pick = self.profile.character;
+                    self.choose_character(pick).ok()?
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    fn bare(
         program: &'a Program,
         assets: &'a Assets,
         profile: Profile,
