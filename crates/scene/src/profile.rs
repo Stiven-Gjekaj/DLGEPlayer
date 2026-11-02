@@ -24,6 +24,9 @@ pub struct Profile {
     pub given_name: String,
     /// The last pick of the character select, from 1 to 6.
     pub character: i32,
+    /// The number of correct keyword picks of each chapter with a
+    /// monologue.
+    pub monologue: BTreeMap<String, i32>,
 }
 
 impl Default for Profile {
@@ -36,6 +39,7 @@ impl Default for Profile {
             family_name: "Komori".into(),
             given_name: "Yui".into(),
             character: 1,
+            monologue: BTreeMap::new(),
         }
     }
 }

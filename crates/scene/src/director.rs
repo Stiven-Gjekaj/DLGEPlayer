@@ -29,6 +29,13 @@ pub const BACKLOG_LIMIT: usize = 300;
 /// The number of runs in a row with no event before the director stops.
 const QUIET_LIMIT: usize = 10_000;
 
+/// The opcode that starts a monologue.
+const MONOLOGUE_START: u32 = 0x5a7;
+/// The opcode of the keyword pick at the end of a monologue.
+const MONOLOGUE_PICK: u32 = 0x6b2;
+/// The number of picks of a keyword pick.
+const MONOLOGUE_PICKS: usize = 2;
+
 /// A sprite on the screen, or a sprite that a script prepared.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct FigureState {
@@ -89,6 +96,22 @@ pub struct Scene {
     pub spots: Vec<[i32; 4]>,
     /// The shake of `0x513` for each axis: the size and the count.
     pub shake: [[i32; 2]; 2],
+    /// The keywords of the current monologue.
+    #[serde(default)]
+    pub keywords: Vec<Keyword>,
+}
+
+/// A keyword of a monologue. The player picks the correct keywords at the
+/// end of the monologue.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Keyword {
+    /// The line of the keyword, with the keyword in `【】`. The English
+    /// patch has no keyword words, so `◆` shows the place of the keyword.
+    pub line: String,
+    /// `#KW_T1` and `#KW_T2` mark a correct keyword. `#KW_F` marks a wrong
+    /// one.
+    pub correct: bool,
+    pub picked: bool,
 }
 
 /// A touch point of a picture.
@@ -227,6 +250,12 @@ pub enum Event {
     Movie {
         file: String,
     },
+    /// Wait until the player picks `picks` keywords of a monologue. Call
+    /// `choose_keyword` for each pick.
+    Monologue {
+        options: Vec<String>,
+        picks: usize,
+    },
     /// Wait until the player touches each point.
     Hotspots {
         spots: Vec<Hotspot>,
@@ -288,6 +317,11 @@ impl vm::Host for Fixed {
 enum Pending {
     Choice(Command),
     Character(Command),
+    /// The picks that are still to come, and the number of correct picks.
+    Monologue {
+        left: usize,
+        score: i32,
+    },
 }
 
 /// Plays one chapter for a screen.
@@ -345,6 +379,41 @@ pub(crate) fn keywords(text: &str) -> String {
         }
     }
     out.push_str(rest);
+    out
+}
+
+/// Gives the keywords of a line. The line of each keyword has the
+/// keyword in `【】` and no marks.
+fn monologue_keywords(line: &str) -> Vec<Keyword> {
+    let mut out = Vec::new();
+    let mut rest = line;
+    let mut before = String::new();
+    while let Some(at) = rest.find("#KW_") {
+        let Some(end) = rest[at..].find(']') else {
+            break;
+        };
+        let mark = &rest[at..at + end + 1];
+        before.push_str(&rest[..at]);
+        rest = &rest[at + end + 1..];
+        if mark == "#KW_ED[]" {
+            continue;
+        }
+        let word_end = rest.find("#KW_ED[]").unwrap_or(rest.len());
+        let word = &rest[..word_end];
+        let shown = if word == "｡" { "◆" } else { word };
+        let after = keywords(rest[word_end..].trim_start_matches("#KW_ED[]"));
+        out.push(Keyword {
+            line: format!(
+                "{}【{shown}】{}",
+                keywords(&before).trim_end(),
+                after.trim_start()
+            )
+            .trim()
+            .to_string(),
+            correct: !mark.starts_with("#KW_F"),
+            picked: false,
+        });
+    }
     out
 }
 
@@ -419,6 +488,12 @@ impl<'a> Director<'a> {
             match self.next_event().ok()? {
                 Event::End { .. } => return Some(self.scene.clone()),
                 Event::Choice { .. } => self.choose(0).ok()?,
+                Event::Monologue { .. } => {
+                    while matches!(self.pending, Some(Pending::Monologue { .. })) {
+                        let pick = self.scene.keywords.iter().position(|k| !k.picked)?;
+                        self.choose_keyword(pick).ok()?;
+                    }
+                }
                 Event::SelectCharacter => {
                     let pick = self.profile.character;
                     self.choose_character(pick).ok()?
@@ -614,6 +689,19 @@ impl<'a> Director<'a> {
                     self.pending = Some(Pending::Character(command.clone()));
                     return Ok(Event::SelectCharacter);
                 }
+                Command::Engine {
+                    opcode: MONOLOGUE_PICK,
+                    ..
+                } if !self.scene.keywords.is_empty() => {
+                    self.session.play(&command, &mut Fixed(0))?;
+                    let picks = MONOLOGUE_PICKS.min(self.scene.keywords.len());
+                    self.pending = Some(Pending::Monologue {
+                        left: picks,
+                        score: 0,
+                    });
+                    let options = self.scene.keywords.iter().map(|k| k.line.clone()).collect();
+                    return Ok(Event::Monologue { options, picks });
+                }
                 _ => {}
             }
             self.session.play(&command, &mut Fixed(0))?;
@@ -666,14 +754,43 @@ impl<'a> Director<'a> {
         }
     }
 
+    /// Gives one pick of a keyword pick, 0 for the first keyword. Gives
+    /// true for a correct keyword. After the last pick, the profile keeps
+    /// the number of correct picks for the chapter.
+    pub fn choose_keyword(&mut self, pick: usize) -> Result<bool, Error> {
+        let Some(Pending::Monologue { left, score }) = self.pending else {
+            return Err(Error::Waiting("no keyword pick".into()));
+        };
+        let Some(keyword) = self.scene.keywords.get_mut(pick).filter(|k| !k.picked) else {
+            return Err(Error::Waiting(format!("no keyword {pick}")));
+        };
+        keyword.picked = true;
+        let correct = keyword.correct;
+        let score = score + correct as i32;
+        if left > 1 {
+            self.pending = Some(Pending::Monologue {
+                left: left - 1,
+                score,
+            });
+        } else {
+            self.pending = None;
+            self.scene.keywords.clear();
+            let chapter = self.session.script().to_string();
+            self.profile.monologue.insert(chapter, score);
+        }
+        Ok(correct)
+    }
+
     /// Puts the names of the heroine into a text, and removes the keyword
     /// marks.
     fn names(&self, text: &str) -> String {
-        keywords(
-            &text
-                .replace("#Name[1]", &self.profile.family_name)
-                .replace("#Name[2]", &self.profile.given_name),
-        )
+        keywords(&self.names_only(text))
+    }
+
+    /// Puts the names of the heroine into a text.
+    fn names_only(&self, text: &str) -> String {
+        text.replace("#Name[1]", &self.profile.family_name)
+            .replace("#Name[2]", &self.profile.given_name)
     }
 
     /// Gives the game prefix of the current script: `ve` or `mb`.
@@ -799,6 +916,11 @@ impl<'a> Director<'a> {
         let game_number = self.game_number();
         let scene = &mut self.scene;
         Some(match opcode {
+            // A monologue starts. Its messages give the keywords.
+            MONOLOGUE_START => {
+                scene.keywords.clear();
+                return None;
+            }
             // The speaker of the next message.
             0x4bc => {
                 scene.speaker = int(args, 0);
@@ -1052,6 +1174,12 @@ impl<'a> Director<'a> {
     }
 
     fn message(&mut self, lines: &[String]) -> Event {
+        for line in lines {
+            if line.contains("#KW_") {
+                let line = self.names_only(line);
+                self.scene.keywords.extend(monologue_keywords(&line));
+            }
+        }
         let mut lines: Vec<String> = lines.iter().map(|l| self.names(l)).collect();
         while lines.last().is_some_and(|l| l.is_empty()) {
             lines.pop();

@@ -423,3 +423,68 @@ fn removes_the_keyword_marks() {
     assert_eq!(keywords("A sign ｡ stays."), "A sign ｡ stays.");
     assert_eq!(keywords("#KW_T1[5 with no end"), "#KW_T1[5 with no end");
 }
+
+#[test]
+fn picks_the_keywords_of_a_monologue() {
+    let dir = folder("monologue");
+    let assets = Assets::load(&dir).unwrap();
+    let mut code = vec![engine(0x5a7, vec![])];
+    code.extend(line("I wonder how I can earn his#KW_T1[5]｡#KW_ED[]trust?"));
+    code.extend(line("#KW_F[]先生#KW_ED[]が言うように"));
+    code.extend(line("それとは#KW_T2[5]どこか違う#KW_ED[]ような"));
+    code.extend([engine(0x6b2, vec![]), engine(0x5a8, vec![])]);
+    code.extend(line("After"));
+    code.extend([engine(0x700, vec![]), I::Return]);
+    let mut program = Program::empty();
+    program.insert(ScriptIr {
+        name: "mb_aya_Dark_07".into(),
+        exports: BTreeMap::from([("sure1".into(), 0)]),
+        globals: BTreeMap::new(),
+        code,
+    });
+    program.numbers.insert((1, 107), "mb_aya_Dark_07".into());
+    let mut director =
+        Director::new(&program, &assets, Profile::default(), "mb_aya_Dark_07").unwrap();
+
+    let mut texts = Vec::new();
+    let (options, picks) = loop {
+        match director.next_event().unwrap() {
+            Event::Monologue { options, picks } => break (options, picks),
+            Event::Text { lines, .. } => texts.push(lines.join("/")),
+            _ => {}
+        }
+    };
+    assert_eq!(
+        texts,
+        [
+            "I wonder how I can earn his trust?",
+            "先生が言うように",
+            "それとはどこか違うような"
+        ]
+    );
+    assert_eq!(
+        options,
+        [
+            "I wonder how I can earn his【◆】trust?",
+            "【先生】が言うように",
+            "それとは【どこか違う】ような"
+        ]
+    );
+    assert_eq!(picks, 2);
+    assert!(director.next_event().is_err());
+    assert!(director.choose_keyword(0).unwrap());
+    assert!(
+        director.choose_keyword(0).is_err(),
+        "a keyword is picked one time"
+    );
+    assert!(!director.choose_keyword(1).unwrap());
+    assert_eq!(director.profile.monologue.get("mb_aya_Dark_07"), Some(&1));
+    let rest: Vec<String> = std::iter::from_fn(|| director.next_event().ok())
+        .take_while(|e| !matches!(e, Event::End { .. }))
+        .filter_map(|e| match e {
+            Event::Text { lines, .. } => Some(lines.join("/")),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(rest, ["After"]);
+}

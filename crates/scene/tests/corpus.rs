@@ -21,6 +21,8 @@ fn every_chapter_plays_to_the_end() {
     let mut missing = BTreeSet::new();
     let mut other: BTreeMap<u32, usize> = BTreeMap::new();
     let mut texts = 0;
+    let mut monologues = 0;
+    let mut scored = BTreeSet::new();
     for name in &names {
         let mut director = Director::new(&program, &assets, Profile::default(), name).unwrap();
         let mut events = 0;
@@ -33,6 +35,12 @@ fn every_chapter_plays_to_the_end() {
                 Ok(Event::End { .. }) => break Ok(()),
                 Ok(Event::Choice { .. }) => director.choose(0).unwrap(),
                 Ok(Event::SelectCharacter) => director.choose_character(1).unwrap(),
+                Ok(Event::Monologue { picks, .. }) => {
+                    monologues += 1;
+                    for pick in 0..picks {
+                        director.choose_keyword(pick).unwrap();
+                    }
+                }
                 Ok(Event::Text { .. }) => texts += 1,
                 Ok(Event::Other { opcode, .. }) => *other.entry(opcode).or_default() += 1,
                 Ok(_) => {}
@@ -43,8 +51,13 @@ fn every_chapter_plays_to_the_end() {
             failed.push(format!("{name}: {e}"));
         }
         missing.extend(director.missing());
+        scored.extend(director.profile.monologue.keys().cloned());
     }
-    eprintln!("{} chapters, {texts} messages", names.len());
+    eprintln!(
+        "{} chapters, {texts} messages, {monologues} keyword picks in {} chapters",
+        names.len(),
+        scored.len()
+    );
     eprintln!("opcodes with no event: {other:x?}");
     eprintln!("{} names with no file: {missing:?}", missing.len());
     assert!(
