@@ -32,10 +32,9 @@ _Haunted Dark Bridal and MORE,BLOOD, on your computer and your phone, from your 
 ---
 
 > [!NOTE]
-> **Phases 1 to 5 of 8 are done. The player does not show the game yet.**
-> `dlplayer import` converts your NSP into the folder that the player
-> reads. `dlplayer run` runs all 706 chapters of both games with no screen:
-> each chapter reaches its end with each choice.
+> **Phases 1 to 6 of 8 are done.** The player plays both games on macOS.
+> The CI builds Windows and Linux, but nobody has played those builds yet.
+> On the first start, the player imports your NSP with your keys.
 > [docs/roadmap.md](docs/roadmap.md) gives the next phases.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes.
 
@@ -64,8 +63,8 @@ The project has three parts:
    Godot 4 app with a launcher, separate saves for each game, and a shared
    gallery and settings.
 
-The player never reads a console format. A later phase applies the
-community English patch over the dump.
+The player never reads a console format. The English patch of the
+community ships with the player, and the import applies it.
 
 ## Features
 
@@ -86,12 +85,18 @@ Done:
 - Import for a phone with `--mobile`, and continue an import that stopped
 - Run the scripts with no screen: flags, choices, jumps, saves, and a
   coverage report
+- Play both games in a Godot 4 app: the message window, the speaker, the
+  voices with lip sync, the sprites with blinks, the backgrounds, the event
+  images, the music, the choices, and the effects
+- Save and load with 60 slots for each game, a backlog with voices, auto
+  and skip modes, a gallery, a music room, and settings
+- Play the MP4 movies with no FFmpeg
+- Import the NSP on the first start, in the app
 
 Planned:
 
-- The Godot player ([phase 6](docs/roadmap.md))
-- Builds for Windows, macOS, Linux, Android, and iOS
-- The English text in the player
+- Builds for Android and iOS ([phase 7](docs/roadmap.md))
+- The font of the game ([phase 8](docs/roadmap.md))
 
 ## You need a copy of the game
 
@@ -112,11 +117,19 @@ the import, you can delete the NSP and the keys.
 
 ## Build
 
-You need Rust 1.88 or later.
+You need Rust 1.88 or later for the tools.
 
     cargo build --release
 
 The tool is `target/release/dlplayer`.
+
+The player needs Rust 1.94 or later and Godot 4.7.
+
+    scripts/build-player.sh
+    godot --path godot
+
+[docs/player.md](docs/player.md) describes the player, the controls, and
+the export.
 
 ## Import a dump
 
@@ -161,6 +174,7 @@ stopped.
 | `dlplayer layout romfs/Archive/title.nxonnx32.bea title` | Writes the files of the layouts and their textures |
 | `dlplayer audio BGM01.hca BGM01.ogg` | Converts an HCA file to Ogg Vorbis |
 | `dlplayer run imported --report report.json` | Runs all chapters with no screen and reports the coverage |
+| `dlplayer trace imported mb_aya_Dark_01` | Prints each command of each run of one chapter |
 
 ## Crates
 
@@ -173,9 +187,11 @@ stopped.
 | `sarc` | Reads SARC archives, such as the layouts |
 | `lyt` | Reads NintendoWare `.bflyt` layouts and `.bflan` animations |
 | `nsp` | Reads the RomFS of an NSP file with the keys of the user |
+| `chara` | Reads the layouts of the character sprites and resolves the sprite names of the scripts |
 | `importer` | Converts a dump into a normalized folder: the script IR, the images, the sprites, the audio, and the layouts |
 | `vm` | Runs the script IR with no screen: the flags, the choices, the jumps, and the saves |
-| `player` | The Godot 4 extension. Empty. |
+| `scene` | Turns the commands of the VM into events for a screen, and keeps the saves, the profile, and the chapter list |
+| `player` | The Godot 4 extension: the player, the movie decoder, and the importer for GDScript |
 | `dlplayer` | The command line tool |
 
 ## Tests
@@ -195,12 +211,16 @@ game. The corpus tests read a real dump only if you set these variables:
 DLGE_SCRIPTS=scripts DLGE_ARCHIVES=romfs/Archive cargo test --workspace --release
 ```
 
+With `DLGE_IMPORT`, the `scene` crate plays every chapter through the
+director, and the `player` crate decodes each movie.
+
 ## Documentation
 
 | File | Contents |
 | ---- | -------- |
 | [docs/formats.md](docs/formats.md) | The formats of the game, the layout of the RomFS, and the import folder |
 | [docs/opcodes.md](docs/opcodes.md) | The script VM of the game and the meaning of the opcodes |
+| [docs/player.md](docs/player.md) | The player: the events, the saves, the screen, the controls, and the export |
 | [docs/roadmap.md](docs/roadmap.md) | The phases, the platforms, and the risks |
 | [docs/decisions.md](docs/decisions.md) | Each decision and its reason |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to help |
