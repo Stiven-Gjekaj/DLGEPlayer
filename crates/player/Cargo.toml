@@ -4,7 +4,16 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-rust-version.workspace = true
+# gdext 0.5 needs Rust 1.94. The other crates need only 1.88.
+rust-version = "1.94"
 repository.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
+godot = { version = "0.5.5", features = ["api-4-7"] }
+scene.workspace = true
+serde = "1"
+serde_json = "1"
+vm.workspace = true
