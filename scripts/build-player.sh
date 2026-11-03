@@ -39,8 +39,8 @@ ios)
     # .cargo/config.toml gives the oldest iOS version to cargo.
     min=$(sed -n 's/^IPHONEOS_DEPLOYMENT_TARGET = "\(.*\)"/\1/p' .cargo/config.toml)
     # The simulator part of the iOS template of Godot 4.7 holds only
-    # x86_64 code, so the simulator library holds x86_64 too. An Apple
-    # silicon Mac runs it with Rosetta.
+    # x86_64 code, so the simulator library holds x86_64 too. For an
+    # Apple silicon Mac, scripts/ios-simulator.py adds arm64 code to it.
     for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
         cargo build -p player $flag --target "$target"
     done
