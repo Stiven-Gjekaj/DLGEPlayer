@@ -301,8 +301,10 @@ func _handle(e: Dictionary) -> void:
 			_flush_transition()
 			await _movie(e.file)
 		"hotspots":
-			_flush_transition()
-			await _hotspots(e.spots)
+			_hotspots(e.spots)
+		"hotspots_end":
+			for c in spot_layer.get_children():
+				c.queue_free()
 		"end":
 			_flush_transition()
 			running = false
@@ -749,8 +751,11 @@ func _choice_titles(titles: Array) -> void:
 		c.queue_free()
 
 
+## Shows touch points. They stay until the event `hotspots_end`, and the
+## story goes on. A touch plays the voice of the point.
 func _hotspots(spots: Array) -> void:
-	var left := spots.size()
+	for c in spot_layer.get_children():
+		c.queue_free()
 	for s in spots:
 		var b := Button.new()
 		b.text = "♥"
@@ -764,13 +769,8 @@ func _hotspots(spots: Array) -> void:
 			if path:
 				voice.stream = App.audio(path)
 				voice.play()
-			b.queue_free()
-			left -= 1)
+			b.queue_free())
 		spot_layer.add_child(b)
-	while left > 0 and running and not _skipping():
-		await get_tree().process_frame
-	for c in spot_layer.get_children():
-		c.queue_free()
 
 
 func _movie(file: String) -> void:

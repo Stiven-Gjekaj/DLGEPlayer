@@ -576,3 +576,60 @@ fn opens_heaven_chapters_with_the_monologue_score() {
         .collect();
     assert_eq!(mb, ["mb_aya_Heaven_01", "mb_aya_Heaven_03"]);
 }
+
+#[test]
+fn shows_touch_points_from_0x69b_to_0x69c() {
+    let dir = folder("spots");
+    let assets = Assets::load(&dir).unwrap();
+    let mut code = vec![
+        engine(
+            0x69a,
+            vec![V::Int(0), V::Int(514), V::Int(283), V::Int(30063)],
+        ),
+        engine(0x69b, vec![]),
+    ];
+    code.extend(line("One"));
+    code.extend(line("Two"));
+    code.push(I::Unregistered {
+        opcode: 0x69c,
+        args: vec![],
+    });
+    code.extend(line("Three"));
+    code.extend([engine(0x700, vec![]), I::Return]);
+    let mut program = Program::empty();
+    program.insert(ScriptIr {
+        name: "mb_aya_Dark_09".into(),
+        exports: BTreeMap::from([("sure1".into(), 0)]),
+        globals: BTreeMap::new(),
+        code,
+    });
+    program.numbers.insert((1, 109), "mb_aya_Dark_09".into());
+    let mut director =
+        Director::new(&program, &assets, Profile::default(), "mb_aya_Dark_09").unwrap();
+
+    let mut kinds = Vec::new();
+    let mut save = None;
+    loop {
+        let e = director.next_event().unwrap();
+        if let Event::Hotspots { spots } = &e {
+            assert_eq!(spots.len(), 1);
+            assert_eq!((spots[0].x, spots[0].y), (514, 283));
+            assert_eq!(spots[0].voice.as_deref(), Some("audio/voice/mb_030063.ogg"));
+        }
+        if matches!(&e, Event::Text { lines, .. } if lines[0] == "Two") {
+            save = Some(director.save(0));
+        }
+        let end = matches!(e, Event::End { .. });
+        kinds.push(kind(&e));
+        if end {
+            break;
+        }
+    }
+    assert_eq!(
+        kinds,
+        ["hotspots", "text", "text", "hotspots_end", "text", "end"]
+    );
+    // A load while the points show gives them again.
+    let (_, events) = Director::load(&program, &assets, Profile::default(), save.unwrap()).unwrap();
+    assert!(events.iter().any(|e| matches!(e, Event::Hotspots { .. })));
+}

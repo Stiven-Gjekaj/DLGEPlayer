@@ -96,6 +96,9 @@ pub struct Scene {
     pub voice: Option<i32>,
     /// The touch points of `0x69a`: an index, a position, and a voice.
     pub spots: Vec<[i32; 4]>,
+    /// The touch points show, from `0x69b` to `0x69c`.
+    #[serde(default)]
+    pub spots_shown: bool,
     /// The shake of `0x513` for each axis: the size and the count.
     pub shake: [[i32; 2]; 2],
     /// The keywords of the current monologue.
@@ -258,10 +261,13 @@ pub enum Event {
         options: Vec<String>,
         picks: usize,
     },
-    /// Wait until the player touches each point.
+    /// Show touch points. The story goes on while they show. A touch
+    /// plays the voice of the point.
     Hotspots {
         spots: Vec<Hotspot>,
     },
+    /// Remove the touch points.
+    HotspotsEnd,
     /// The chapter is over. `next` is the next chapter of the route.
     End {
         next: Option<String>,
@@ -933,6 +939,9 @@ impl<'a> Director<'a> {
         events.push(Event::Window {
             visible: self.scene.window,
         });
+        if self.scene.spots_shown {
+            events.push(self.hotspots_event());
+        }
         events
     }
 
@@ -1196,24 +1205,35 @@ impl<'a> Director<'a> {
                 return None;
             }
             0x69b => {
-                let spots = std::mem::take(&mut scene.spots);
-                let game = self.game().to_string();
-                Event::Hotspots {
-                    spots: spots
-                        .iter()
-                        .map(|s| Hotspot {
-                            x: s[1],
-                            y: s[2],
-                            voice: self.assets.voice(&game, s[3]).map(|t| t.file.clone()),
-                        })
-                        .collect(),
-                }
+                scene.spots_shown = true;
+                self.hotspots_event()
+            }
+            0x69c => {
+                scene.spots.clear();
+                scene.spots_shown = false;
+                Event::HotspotsEnd
             }
             _ => Event::Other {
                 opcode,
                 args: describe(args),
             },
         })
+    }
+
+    fn hotspots_event(&self) -> Event {
+        let game = self.game();
+        Event::Hotspots {
+            spots: self
+                .scene
+                .spots
+                .iter()
+                .map(|s| Hotspot {
+                    x: s[1],
+                    y: s[2],
+                    voice: self.assets.voice(game, s[3]).map(|t| t.file.clone()),
+                })
+                .collect(),
+        }
     }
 
     fn message(&mut self, lines: &[String]) -> Event {
