@@ -238,3 +238,51 @@ jobs:
             godot/export/android/*.apk
             godot/export/ios/*.ipa
           if-no-files-found: error
+
+  # A tag such as v1.2.3 makes a GitHub release with the build of each
+  # platform. A name with a space becomes a name with a dot on GitHub, so
+  # each file gets a name with no space. The release text is the section of
+  # the version in CHANGELOG.md.
+  release:
+    name: release
+    if: github.ref_type == 'tag'
+    needs: [desktop, mobile]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
+      # The layout inside an artifact depends on the paths of the upload,
+      # so the step finds each file by its name.
+      - name: put the files in order
+        run: |
+          one() {
+            found=$(find artifacts -type f -name "$1")
+            test "$(printf '%s\n' "$found" | grep -c .)" = 1 || { echo "need one $1: $found"; exit 1; }
+            printf '%s\n' "$found"
+          }
+          mkdir release
+          cp "$(one 'DLGE Player.zip')" release/DLGE-Player-macOS.zip
+          windows=$(dirname "$(one 'DLGE Player.exe')")
+          (cd "$windows" && zip -qr "$GITHUB_WORKSPACE/release/DLGE-Player-Windows.zip" .)
+          linux=$(dirname "$(one 'dlge-player.x86_64')")
+          chmod +x "$linux/dlge-player.x86_64"
+          tar -czf release/DLGE-Player-Linux.tar.gz -C "$linux" .
+          cp "$(one 'dlge-player.apk')" release/DLGE-Player.apk
+          cp "$(one 'DLGE Player.ipa')" release/DLGE-Player.ipa
+          ls -l release
+      - name: write the release text
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          awk -v v="$version" '
+            /^## / { found = ($2 == v) ; next }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md
+      - name: make the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --title "DLGE Player ${GITHUB_REF_NAME#v}" --notes-file notes.md
