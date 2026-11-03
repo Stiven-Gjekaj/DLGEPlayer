@@ -180,6 +180,14 @@ Each entry gives the reason.
   each `Dark` route is open. The other routes open after the end of the
   `Dark` route. Reason: the menu of the game is Lua bytecode, and the
   player does not run it. The setting "Open all chapters" opens all.
+- **The `Heaven` chapters open with the monologue score, as in the game.**
+  Reason: the rules are in the executable, not in the Lua menu
+  ([opcodes.md](opcodes.md#the-monologue-and-the-keyword-pick)).
+- **The keyword pick shows the line of each keyword as a button.** Reason:
+  the game shows the keywords in the full text of the monologue, and the
+  player does not show a monologue in that form yet. The English patch
+  has no keyword words, so the line is the only way to tell the keywords
+  apart.
 - **The text uses a font of the system.** Reason: the game font is a
   bitmap font of the console (`font/main.bffnt`), and the system font has
   each character of the shown text in both languages.

@@ -66,7 +66,8 @@ second. The screen handles each event:
 | `shake` | `0x513`, `0x510` | Shakes the screen. |
 | `camera` | `0x4f4`, `0x3f4` | Zooms or moves the screen. |
 | `movie` | `0x44b` | Plays a movie. |
-| `hotspots` | `0x69a`, `0x69b` | Shows touch points. Each point plays a voice. |
+| `hotspots`, `hotspots_end` | `0x69a`, `0x69b`, `0x69c` | Shows touch points until `0x69c`. The story goes on. Each point plays a voice. |
+| `monologue` | `0x6b2` | Shows the line of each keyword of the monologue. The player picks 2, and `choose_keyword` gives each pick. |
 | `end` | `0x700`, `0x4bf` | The chapter ends. `next` names the next chapter of the route. |
 | `other` | other opcodes | The screen does nothing. |
 
@@ -102,7 +103,7 @@ The files are in the `user://` folder of Godot:
 | File | Contents |
 |---|---|
 | `settings.cfg` | The settings and the path of the import folder |
-| `profile.json` | The system flags, the finished chapters, the seen event images, the read messages, the heroine names, and the last character pick |
+| `profile.json` | The system flags, the finished chapters, the seen event images, the read messages, the heroine names, the last character pick, and the correct keyword picks of each chapter |
 | `saves/ve/<n>.json`, `saves/mb/<n>.json` | The 60 save slots of each game |
 
 ## The screen
@@ -121,7 +122,9 @@ The screen is 1920 by 1080. Godot scales it to the window.
   Hiragino Mincho on macOS and Yu Mincho on Windows. The size is 48. A
   message with a line that is wider than the box gets a smaller size.
 - The player removes the keyword marks, such as `#KW_T1[5]`, and keeps the
-  words between them.
+  words between them. The keyword pick at the end of the monologue shows
+  each keyword in `【】`. The English patch has no keyword words, so `◆`
+  shows the place of the keyword.
 
 ## Controls
 

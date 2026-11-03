@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The player shows the keyword pick at the end of a monologue. The
+  profile keeps the correct picks, and their sum opens the `Heaven`
+  chapters as in the game.
+- The touch points of `0x69b` stay on the screen until `0x69c`, and the
+  story goes on.
 - The player removes the keyword marks, such as `#KW_T1[5]`, from the
   text. In the English text, a keyword mark gives a space.
 - A message with a line that is too wide for the message box gets a

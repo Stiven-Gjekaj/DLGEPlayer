@@ -118,10 +118,14 @@ functions that register the opcodes from 1000 (`0x3e8`):
 `FUN_710006d4d0`, `FUN_710006f380`, `FUN_710006ff00`, and `FUN_7100070df0`.
 Each one calls `FUN_7100074f60(vm, opcode, handler)`.
 
-These functions register 764 opcodes. 369 have a handler. 395 have no
-handler. The scripts use 76 opcodes. Opcodes `0x69b` and `0x69c` appear in
-137 actions each, but these functions do not register them. Opcode `0x64f`
-is registered with no handler.
+These functions register 764 opcodes. The scripts use 76 opcodes.
+`FUN_7100074f60` writes a handler only into an empty slot. A second call
+for the same opcode changes nothing. So the counts of the handlers must
+include the first call of each opcode only.
+`FUN_710006ff00` registers `0x69a`, `0x69b`, and `0x69c` with handlers, and
+then calls the function again for `0x69b` and `0x69c` with no handler.
+These second calls change nothing, so the three opcodes keep their
+handlers.
 
 Most handlers do not act directly. They make a command object and queue it
 for the scene engine with `FUN_71000198d0`. The game has no C++ type
@@ -245,20 +249,55 @@ The handlers of these opcodes only return 1. On the Switch, they do
 nothing: `0x467`, `0x46a`, `0x492`, `0x493`, `0x494`, `0x495`, `0x61a`, and
 `0x668`.
 
-## Opcodes with no handler
+## The touch points and 0x64f
 
-`0x64f` is registered with no handler. `0x69b` and `0x69c` are not
-registered. No other code writes their slots in the handler table.
+`0x69b` and `0x69c` have handlers (see above). The commands of both end at
+once. `0x69b` calls `FUN_7100013330` and sets a flag. `0x69c` calls
+`FUN_7100013530` and clears the flag. So `0x69b` turns on the touch points
+of the `0x69a` actions before it, and `0x69c` turns them off. Messages come
+between them. In `mb_aya_Dark_09`, two `0x69a` actions with the params
+`0, 514, 283, 38004` and `1, 388, 202, 38005` come before `0x69b`, and
+`0x69c` comes 8 messages later.
 
-For an empty slot, the run loop calls the assertion handler and does not
-move the program counter. The same action then runs again. But the runs
-of the `vm` crate reach these actions in 167 scripts, in the main story.
-So code that we have not found must fill the slots at run time. The `vm`
-crate gives these actions to the host and goes on.
+`0x64f` has no handler. Each script has it only in a helper at action 482
+that sets an RGB colour from a preset. No script calls this helper, so
+`0x64f` never runs. In the runs of all 706 chapters, no `0x64f` reaches
+the director.
 
-`0x69a` comes before `0x69b`. In `mb_aya_Dark_09`, two `0x69a` actions with
-the params `0, 514, 283, 38004` and `1, 388, 202, 38005` come before one
-`0x69b`.
+## The monologue and the keyword pick
+
+`0x5a7` starts a monologue and `0x5a8` ends it. The messages of the
+monologue mark keywords. A keyword starts with `#KW_F[]`, `#KW_T1[5]`, or
+`#KW_T2[5]`, and ends with `#KW_ED[]`.
+
+`FUN_710003b530` reads the marks when the text goes into the window. It
+removes the marks, puts one ideographic space (U+3000) in the place of each
+character of the keyword, and keeps the keyword, its line, its column, and
+its kind for the screen.
+
+`0x6b2` starts the keyword pick, in `FUN_710002ba70`. The player picks 2 of
+the 3 keywords. A `T` keyword is correct, and the game plays the `True`
+animation of `UI_Parts_MonologueTrue`. An `F` keyword is wrong, and the
+game plays `Parts_Monologue_False`. `FUN_7100011fb0` keeps the number of
+correct picks for the game, the character, and the chapter. The script
+gives `0x6b2` before the message with the last keyword, but the game reads
+that message first.
+
+The 192 chapters with a pick are chapters 07 to 10 of the `Dark`,
+`Maniac`, and `Ecstasy` routes. So a character has 12 picks and at most
+24 correct picks. `FUN_7100011d90` gives the sum for a character.
+`FUN_7100011600` (Haunted Dark Bridal) and `FUN_710000ef60` (MORE,BLOOD)
+open the `Heaven` chapters with this sum:
+
+| Game | Chapter | Needs |
+|---|---|---|
+| `ve` | `Heaven_00` | the end of `ED_01` |
+| `ve` | `Heaven_01` | the end of `Heaven_00` and 15 |
+| `ve` | `Heaven_02` | the end of `Heaven_01` and 18 |
+| `ve` | `Heaven_03`, `Heaven_04` | the end of the chapter before and 21 |
+| `mb` | `Heaven_01` | the end of an `ED` chapter and 15 |
+| `mb` | `Heaven_02` | the end of an `ED` chapter and 18 |
+| `mb` | `Heaven_03` | the end of an `ED` chapter and 21 |
 
 ## Other opcodes
 
@@ -326,11 +365,13 @@ with the first option of each choice.
 | `0x513`, `0x510` | 4916 | guess | 0, axis, size, count; then 0, axis, frames | A shake of the screen. |
 | `0x4f4`, `0x3f4` | 46 | guess | position and zoom | A zoom and a move of the camera on an event image. |
 | `0x69a` | 371 | guess | index, x, y, voice | A touch point on a screen of 960 by 544, with a voice. |
-| `0x69b` | 231 | guess | none | Wait until the player touches the points. |
+| `0x69b`, `0x69c` | 231 | code | none | Turn the touch points on and off. The story goes on between them. |
+| `0x5a7`, `0x5a8` | 393 | code | none | Start and end a monologue. |
+| `0x6b2` | 192 | code | none | The keyword pick of a monologue. |
 
 These opcodes run, but the player shows nothing for them yet: `0x502`,
-`0x504`, `0x506`, `0x5a7`, `0x5a8`, `0x5a9`, `0x5be`, `0x5cd`, `0x5ce`,
-`0x69c`, `0x6b2`, `0x6c2`, and `0x6c3`.
+`0x504`, `0x506`, `0x5a9`, `0x5be`, `0x5cd`, `0x5ce`, `0x6c2`, and
+`0x6c3`.
 
 ## The typed decoder
 

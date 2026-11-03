@@ -485,6 +485,4 @@ engine actions, not in the shown text.
   shows a different glyph for these characters. This is not verified.
 - `op_ff14` has 12 bytes of data that no parameter points to.
 - The meaning of most opcodes is not known yet.
-- The effect of the keyword marks is not known. The executable holds the
-  strings `#KW_F[]`, `#KW_T1[5]`, and `#KW_T2[5]`, but no code refers to
-  them directly.
+- `opcodes.md` describes how the game uses the keyword marks.

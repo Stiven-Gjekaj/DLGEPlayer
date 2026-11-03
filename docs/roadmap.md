@@ -41,18 +41,17 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
    movies with `openh264` and `symphonia`. This risk is closed.
 3. The import folder is 6.6 GB, or 3.3 GB with `--mobile`. The movies are
    1.4 GB of it.
-4. 3 opcodes in the scripts have no handler in the game (`0x64f`, `0x69b`,
-   `0x69c`), but the main story reaches them. `0x69a` and `0x69b` give
-   touch points with voices. The slots of the sprites, the tint colours,
-   and the order of the character select are guesses from the traces.
+4. The slots of the sprites, the tint colours, and the order of the
+   character select are guesses from the traces. 9 opcodes run with no
+   effect on the screen ([opcodes.md](opcodes.md#meanings-from-the-traces)).
 5. The menu that opens the chapters is Lua bytecode. The player opens the
-   chapters in order from its own record of finished chapters. The rules of
+   chapters in order from its own record of finished chapters. The rules
+   for the `Heaven` chapters come from the executable. The other rules of
    the game can differ.
-6. The English patch uses name tokens such as `#Name[2]`. The player puts
-   the names of the settings in their place. The game shows a keyword
-   between `#KW_F[]`, `#KW_T1[5]`, or `#KW_T2[5]` and `#KW_ED[]` with an
-   effect that is not known. The player shows the words with no effect.
-   One English line ends with the mark `#n`, which is a fault of the patch.
+6. The game shows the keyword pick of a monologue in the text of the
+   monologue, and the player touches the keywords there. The player shows
+   the line of each keyword as a button. One English line ends with the
+   mark `#n`, which is a fault of the patch.
 7. The Windows and Linux builds come from CI. Nobody has played them on
    those systems yet.
 8. The iOS template of Godot 4.7.2 has only x86_64 code for the
