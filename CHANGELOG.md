@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 (2026-11-03)
 
+- A tag such as `v1.2.3` gives its version to the apps and makes a GitHub
+  release with the builds for Windows, macOS, Linux, Android, and iOS.
 - The app icon is a crest with a crown, the letter S, and a red rose.
 - `scripts/ios-simulator.py` builds the iOS app for the arm64 simulator
   and starts it.

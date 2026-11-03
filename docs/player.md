@@ -192,6 +192,16 @@ placeholder. Build the app with no signature, then put it in an IPA:
 The user signs the IPA with a sideloading tool, for example SideStore or
 AltStore. The workflow `build.yml` makes the APK and the IPA.
 
+### Make a release
+
+Push a tag such as `v1.2.3`. The workflow `build.yml` runs
+`scripts/set-version.py` with the tag, so each app gets the version
+`1.2.3`. The Android version code is `MAJOR * 10000 + MINOR * 100 + PATCH`.
+Then the workflow makes a GitHub release with the files of all platforms.
+The text of the release is the section `## 1.2.3` of `CHANGELOG.md`, so
+write that section before the tag. The SideStore source reads the IPA of
+each release.
+
 ### Run on the iOS simulator
 
 The simulator part of the iOS template of Godot 4.7.2 holds only x86_64

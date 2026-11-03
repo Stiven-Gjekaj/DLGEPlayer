@@ -99,8 +99,25 @@ Done:
 
 Planned:
 
-- Play the iOS build on a device or in the simulator
-  ([phase 7](docs/roadmap.md))
+- Play the iOS build on a real iPhone ([phase 7](docs/roadmap.md))
+
+## Download
+
+The [releases](https://github.com/Stiven-Gjekaj/DLGEPlayer/releases) hold
+the player for each platform:
+
+| Platform | File |
+|---|---|
+| Windows | `DLGE-Player-Windows.zip` |
+| macOS | `DLGE-Player-macOS.zip` |
+| Linux | `DLGE-Player-Linux.tar.gz` |
+| Android | `DLGE-Player.apk` |
+| iOS | `DLGE-Player.ipa` |
+
+The IPA has no signature. Install it with SideStore or AltStore. To get
+updates, add this source in SideStore or AltStore:
+
+    https://stiven-gjekaj.github.io/sidestore-source/apps.json
 
 ## You need a copy of the game
 
