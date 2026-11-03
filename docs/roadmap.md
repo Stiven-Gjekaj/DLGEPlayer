@@ -12,7 +12,7 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 | 4b | Read the NSP with the `prod.keys` of the user: the PFS0 package, the NCA encryption, and the RomFS. Ship the English patch as the text and the image changes of the translators. | `dlplayer import` takes an NSP and `prod.keys` and needs no other tool. The English text shows in the IR. Done. |
 | 5 | Make the VM. It runs the IR with no screen. It keeps flags, globals, saves, and choices. | Each route runs from start to end with no screen. A report shows the coverage. Done. |
 | 6 | Make the desktop player with Godot 4 and gdext: text box, backlog, choices, images, audio, transitions, launcher, saves for each game, gallery, and settings. | Both games play on macOS, Windows, and Linux. Done on macOS. The CI exports Windows and Linux. |
-| 7 | Make the mobile player: touch controls, import on the device, and a small storage size. | Both games play on Android and iOS. Done on an Android 16 emulator. The iOS app builds, but nobody has run it yet. |
+| 7 | Make the mobile player: touch controls, import on the device, and a small storage size. | Both games play on Android and iOS. Done on an Android 16 emulator and an iOS 27.1 simulator. Nobody has run it on a real iPhone yet. |
 | 8 | Apply the English patch: put the patch files over the dump, and map the text encoding and the font. | The English text shows in the player. Done on macOS. The import applies the patch, the player removes the name and keyword marks, and each line fits the message box. |
 
 ## Platforms
@@ -55,8 +55,11 @@ Phases 2 and 3 do not depend on each other. They can run at the same time.
 7. The Windows and Linux builds come from CI. Nobody has played them on
    those systems yet.
 8. The iOS template of Godot 4.7.2 has only x86_64 code for the
-   simulator. On an Apple silicon Mac, the simulator runs the app with
-   Rosetta.
+   simulator, and a simulator of iOS 27 does not start an x86_64 app.
+   `scripts/ios-simulator.py` marks the arm64 device code as simulator
+   code. The real Godot simulator template can give a different result.
+   The camera cutout of the simulator covers the top left corner of the
+   screen, for example the Back button of the backlog.
 9. On Android, the importer needs the permission for all files, because
    it reads and writes with paths. A store can refuse an app with this
    permission. The player is not for a store, so this is not a problem

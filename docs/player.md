@@ -192,6 +192,28 @@ placeholder. Build the app with no signature, then put it in an IPA:
 The user signs the IPA with a sideloading tool, for example SideStore or
 AltStore. The workflow `build.yml` makes the APK and the IPA.
 
+### Run on the iOS simulator
+
+The simulator part of the iOS template of Godot 4.7.2 holds only x86_64
+code. A simulator of iOS 27 does not start an x86_64 app. On an Apple
+silicon Mac, use this script:
+
+    scripts/build-player.sh debug ios
+    scripts/ios-simulator.py -- --folder <import folder> --chapter mb_aya_Dark_09
+
+The script exports the iOS preset to `godot/export/ios`. It copies the
+arm64 device code of Godot into the simulator part and marks each object
+file as simulator code. It also links empty values for two Metal symbols
+that the simulator SDK does not have. Then it builds the app, installs it
+on the booted simulator, and starts it. `--device <name or UDID>` selects
+a different simulator. The options after `--` go to the player.
+
+The simulator app can read a folder of the Mac, so `--folder` can give an
+import folder that the desktop player made.
+
+`python3 -m unittest discover -s scripts -p "test_*.py"` tests the change
+of the object files.
+
 ## Command line options for tests
 
 The options come after `--`:

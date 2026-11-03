@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `scripts/ios-simulator.py` builds the iOS app for the arm64 simulator
+  and starts it.
 - The player shows the keyword pick at the end of a monologue. The
   profile keeps the correct picks, and their sum opens the `Heaven`
   chapters as in the game.
