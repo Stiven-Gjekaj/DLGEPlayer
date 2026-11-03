@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="20" fill="#2a0508"/>
-  <rect x="6" y="6" width="116" height="116" rx="16" fill="none" stroke="#b8963e" stroke-width="3"/>
-  <text x="64" y="82" font-family="serif" font-style="italic" font-weight="bold" font-size="54" fill="#e8d8b0" text-anchor="middle">DL</text>
-</svg>
