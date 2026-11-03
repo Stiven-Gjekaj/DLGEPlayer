@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The app icon is a crest with a crown, the letter S, and a red rose.
 - `scripts/ios-simulator.py` builds the iOS app for the arm64 simulator
   and starts it.
 - The player shows the keyword pick at the end of a monologue. The
