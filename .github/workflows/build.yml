@@ -69,6 +69,13 @@ jobs:
         run: scripts/build-player.sh release
       - name: copy the English patch
         run: mkdir -p godot/patch && cp assets/patch/en.dlpatch godot/patch/
+      # A tag such as v1.2.3 gives its version to the apps.
+      - name: set the version from the tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          python=$(command -v python3 || command -v python)
+          "$python" scripts/set-version.py "$GITHUB_REF_NAME"
 
       - name: cache Godot
         id: godot
@@ -180,6 +187,14 @@ jobs:
           esac
           mkdir -p "$dir"
           cp -R ~/godot-templates/templates "$dir/$GODOT_VERSION.stable"
+
+      # A tag such as v1.2.3 gives its version to the apps.
+      - name: set the version from the tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          python=$(command -v python3 || command -v python)
+          "$python" scripts/set-version.py "$GITHUB_REF_NAME"
 
       # A debug export of Android needs a key. The job makes a new key each
       # time. The user installs the APK by hand, so the key has no other use.
